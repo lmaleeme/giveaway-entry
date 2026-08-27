@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/JsBarcode/3.11.5/JsBarcode.all.min.js"></script>
 <style>
   :root{
     --deep:#1B1B3A;
@@ -219,7 +220,7 @@
   button.submit:disabled{ opacity:0.6; cursor:default; }
 
   .submit-msg{ font-size:12px; margin-top:10px; text-align:center; display:none; }
-  .submit-msg.err{ color:var(--danger); display:block; }
+  .submit-msg.err{ color:var(--danger); }
 
   .success{ display:none; padding:36px 32px; text-align:center; }
   .success.on{ display:block; }
@@ -230,7 +231,7 @@
     font-family:'IBM Plex Mono', monospace;
     font-size:18px;
     color:var(--plum);
-    margin:16px 0;
+    margin:16px 0 4px;
     letter-spacing:0.06em;
   }
 </style>
@@ -297,22 +298,23 @@
         </div>
 
         <button type="submit" class="submit" id="submitBtn">Enter giveaway</button>
-        <p class="submit-msg" id="submitErr" style="display:none">Something went wrong sending your entry. Please try again.</p> 
+        <p class="submit-msg err" id="submitErr" style="display:none;">Something went wrong sending your entry. Please try again.</p>
       </form>
     </div>
 
     <div class="success" id="successPanel">
-<p class="num" id="finalTicket"></p> <p>Winners will be contacted using the mobile number you provided.</p> Replace it with: <p class="num" id="finalTicket"></p> <button type="button" class="submit" id="downloadBtn" style="margin-bottom:16px;">Download my ticket</button> 
+      <h2>You're entered</h2>
+      <p>Thanks — your entry has been received.</p>
+      <p class="num" id="finalTicket"></p>
+      <svg id="ticketBarcode" style="margin: 4px auto 16px; display:block;"></svg>
+      <button type="button" class="submit" id="downloadBtn" style="margin-bottom:16px;">Download my ticket</button>
       <p>Winners will be contacted using the mobile number you provided.</p>
-      <p class="num" id="finalTicket"></p> Add right after it: <svg id="ticketBarcode" style="margin: 4px auto 12px; display:block;"></svg>
-    </p>
     </div>
   </div>
 </div>
 
 <script>
   const CONFIG = {
-    // Replace with your Google Apps Script Web App URL (see setup instructions).
     SHEET_ENDPOINT_URL: "https://script.google.com/macros/s/AKfycbzhENIrwrINZx_mhNRmAKVgxEHH_nRM7nl_C3hOv_K3ekCDwgoK2mhKTUjXsVXIbxYPqw/exec"
   };
 
@@ -327,11 +329,16 @@
   const form = document.getElementById('entryForm');
   const submitBtn = document.getElementById('submitBtn');
   const submitErr = document.getElementById('submitErr');
+  const downloadBtn = document.getElementById('downloadBtn');
 
   let sharedLocation = null;
   let ticketId = null;
 
-  function genTicketId(){ const time = Date.now().toString(36).toUpperCase(); const rand = Math.random().toString(36).slice(2, 6).toUpperCase(); return 'GVA-' + time + '-' + rand; }
+  function genTicketId(){
+    const time = Date.now().toString(36).toUpperCase();
+    const rand = Math.random().toString(36).slice(2, 6).toUpperCase();
+    return 'GVA-' + time + '-' + rand;
+  }
 
   function updatePreview(){
     const f = firstName.value.trim();
@@ -440,15 +447,106 @@
       document.getElementById('finalTicket').textContent = ticketId;
       document.getElementById('formSide').classList.add('hidden');
       document.getElementById('successPanel').classList.add('on');
-      JsBarcode('#ticketBarcode', ticketId, { format: 'CODE128', width: 2, height: 50, displayValue: false, background: 'transparent', lineColor: '#232136' });
+
+      JsBarcode('#ticketBarcode', ticketId, {
+        format: 'CODE128',
+        width: 2,
+        height: 50,
+        displayValue: false,
+        background: 'transparent',
+        lineColor: '#232136'
+      });
     }catch(err){
       submitErr.style.display = 'block';
       submitBtn.disabled = false;
       submitBtn.textContent = 'Enter giveaway';
     }
   });
-  const downloadBtn = document.getElementById('downloadBtn'); downloadBtn.addEventListener('click', () => { drawAndDownloadTicket(firstName.value.trim(), lastName.value.trim(), ticketId); }); function wrapText(ctx, text, x, y, maxWidth, lineHeight){ const words = text.split(' '); let line = ''; for(let n=0;n<words.length;n++){ const testLine = line + words[n] + ' '; if(ctx.measureText(testLine).width > maxWidth && n > 0){ ctx.fillText(line, x, y); line = words[n] + ' '; y += lineHeight; } else { line = testLine; } } ctx.fillText(line, x, y); } function drawAndDownloadTicket(first, last, id){ const canvas = document.createElement('canvas'); canvas.width = 900; canvas.height = 380; const ctx = canvas.getContext('2d'); ctx.fillStyle = '#F5F1E8'; ctx.fillRect(0,0,900,380); const stubWidth = 260; ctx.fillStyle = '#26264D'; ctx.fillRect(0,0,stubWidth,380); ctx.fillStyle = '#F5F1E8'; for(let y=8; y<380; y+=16){ ctx.beginPath(); ctx.arc(stubWidth, y, 6, 0, Math.PI*2); ctx.fill(); } ctx.fillStyle = '#E8B54D'; ctx.font = '600 13px monospace'; ctx.fillText('YOUR TICKET', 28, 50); ctx.fillStyle = '#F5F1E8'; ctx.font = '500 18px monospace'; wrapText(ctx, id, 28, 90, stubWidth - 56, 24); ctx.fillStyle = '#8B87A8'; ctx.font = '11px monospace'; ctx.fillText('ADMIT ONE', 28, 340); ctx.fillText('GIVEAWAY ENTRY', 28, 356); ctx.fillStyle = '#232136'; ctx.font = '600 30px Georgia, serif'; ctx.fillText("You're entered", stubWidth + 40, 90); ctx.fillStyle = '#5A5570'; ctx.font = '16px sans-serif'; ctx.fillText((first + ' ' + last).trim() || 'Giveaway entrant', stubWidth + 40, 130); ctx.fillStyle = '#6B4E71'; ctx.font = '500 14px monospace'; ctx.fillText(id, stubWidth + 40, 165); ctx.fillStyle = '#5A5570'; ctx.font = '13px sans-serif'; wrapText(ctx, 'Keep this ticket as proof of entry. Winners are contacted on the mobile number provided.', stubWidth + 40, 210, 900 - stubWidth - 80, 20); const link = document.createElement('a'); link.download = 'giveaway-ticket-' + id + '.png'; link.href = canvas.toDataURL('image/png'); link.click(); }
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/JsBarcode/3.11.5/JsBarcode.all.min.js"></script>
+
+  downloadBtn.addEventListener('click', () => {
+    drawAndDownloadTicket(firstName.value.trim(), lastName.value.trim(), ticketId);
+  });
+
+  function wrapText(ctx, text, x, y, maxWidth, lineHeight){
+    const words = text.split(' ');
+    let line = '';
+    for(let n=0;n<words.length;n++){
+      const testLine = line + words[n] + ' ';
+      if(ctx.measureText(testLine).width > maxWidth && n > 0){
+        ctx.fillText(line, x, y);
+        line = words[n] + ' ';
+        y += lineHeight;
+      } else { line = testLine; }
+    }
+    ctx.fillText(line, x, y);
+  }
+
+  function drawAndDownloadTicket(first, last, id){
+    const canvas = document.createElement('canvas');
+    canvas.width = 900; canvas.height = 380;
+    const ctx = canvas.getContext('2d');
+
+    ctx.fillStyle = '#F5F1E8';
+    ctx.fillRect(0,0,900,380);
+
+    const stubWidth = 260;
+    ctx.fillStyle = '#26264D';
+    ctx.fillRect(0,0,stubWidth,380);
+
+    ctx.fillStyle = '#F5F1E8';
+    for(let y=8; y<380; y+=16){
+      ctx.beginPath();
+      ctx.arc(stubWidth, y, 6, 0, Math.PI*2);
+      ctx.fill();
+    }
+
+    ctx.fillStyle = '#E8B54D';
+    ctx.font = '600 13px monospace';
+    ctx.fillText('YOUR TICKET', 28, 50);
+
+    ctx.fillStyle = '#F5F1E8';
+    ctx.font = '500 18px monospace';
+    wrapText(ctx, id, 28, 90, stubWidth - 56, 24);
+
+    ctx.fillStyle = '#8B87A8';
+    ctx.font = '11px monospace';
+    ctx.fillText('ADMIT ONE', 28, 340);
+    ctx.fillText('GIVEAWAY ENTRY', 28, 356);
+
+    ctx.fillStyle = '#232136';
+    ctx.font = '600 30px Georgia, serif';
+    ctx.fillText("You're entered", stubWidth + 40, 90);
+
+    ctx.fillStyle = '#5A5570';
+    ctx.font = '16px sans-serif';
+    ctx.fillText((first + ' ' + last).trim() || 'Giveaway entrant', stubWidth + 40, 130);
+
+    ctx.fillStyle = '#6B4E71';
+    ctx.font = '500 14px monospace';
+    ctx.fillText(id, stubWidth + 40, 165);
+
+    ctx.fillStyle = '#5A5570';
+    ctx.font = '13px sans-serif';
+    wrapText(ctx, 'Keep this ticket as proof of entry. Winners are contacted on the mobile number provided.', stubWidth + 40, 210, 900 - stubWidth - 80, 20);
+
+    const barcodeCanvas = document.createElement('canvas');
+    JsBarcode(barcodeCanvas, id, {
+      format: 'CODE128',
+      width: 2,
+      height: 60,
+      displayValue: false,
+      background: '#F5F1E8',
+      lineColor: '#232136'
+    });
+    ctx.drawImage(barcodeCanvas, stubWidth + 40, 250, 320, 70);
+
+    const link = document.createElement('a');
+    link.download = 'giveaway-ticket-' + id + '.png';
+    link.href = canvas.toDataURL('image/png');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
 </script>
 </body>
 </html>

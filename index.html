@@ -331,10 +331,7 @@
   let sharedLocation = null;
   let ticketId = null;
 
-  function genTicketId(){
-    const rand = Math.floor(1000 + Math.random()*9000);
-    return 'GVA-' + rand + '-' + new Date().getFullYear();
-  }
+  function genTicketId(){ const time = Date.now().toString(36).toUpperCase(); const rand = Math.random().toString(36).slice(2, 6).toUpperCase(); return 'GVA-' + time + '-' + rand; }
 
   function updatePreview(){
     const f = firstName.value.trim();

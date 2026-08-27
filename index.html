@@ -440,6 +440,7 @@
       document.getElementById('finalTicket').textContent = ticketId;
       document.getElementById('formSide').classList.add('hidden');
       document.getElementById('successPanel').classList.add('on');
+      JsBarcode('#ticketBarcode', ticketId, { format: 'CODE128', width: 2, height: 50, displayValue: false, background: 'transparent', lineColor: '#232136' });
     }catch(err){
       submitErr.style.display = 'block';
       submitBtn.disabled = false;

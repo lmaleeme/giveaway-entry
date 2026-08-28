@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Redeem a winning ticket</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<style>
+  :root{
+    --deep:#1B1B3A;
+    --deep-2:#26264D;
+    --paper:#F5F1E8;
+    --gold:#E8B54D;
+    --ink:#232136;
+    --ink-soft:#5A5570;
+    --plum:#6B4E71;
+    --ok:#3E7A4F;
+    --warn:#B98F3B;
+    --danger:#C1443C;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--deep);
+    color:var(--paper);
+    font-family:'Inter', sans-serif;
+    min-height:100vh;
+    display:flex;
+    align-items:flex-start;
+    justify-content:center;
+    padding:32px 16px;
+  }
+  .wrap{ width:100%; max-width:440px; }
+  .eyebrow{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:11px;
+    letter-spacing:0.14em;
+    text-transform:uppercase;
+    color:var(--gold);
+    margin:0 0 8px;
+    text-align:center;
+  }
+  h1{
+    font-family:'Fraunces', serif;
+    font-weight:600;
+    font-size:26px;
+    text-align:center;
+    margin:0 0 28px;
+  }
+  .card{
+    background:var(--paper);
+    color:var(--ink);
+    border-radius:14px;
+    padding:26px 22px;
+    box-shadow:0 20px 50px rgba(0,0,0,0.35);
+  }
+  .field{ margin-bottom:16px; }
+  label{
+    display:block;
+    font-size:12px;
+    font-weight:600;
+    color:var(--ink-soft);
+    margin-bottom:6px;
+    letter-spacing:0.02em;
+  }
+  input[type=text], input[type=password]{
+    width:100%;
+    border:1.5px solid #DAD4C4;
+    background:#FFFDF9;
+    border-radius:8px;
+    padding:12px;
+    font-size:16px;
+    font-family:'IBM Plex Mono', monospace;
+    color:var(--ink);
+  }
+  input:focus{
+    outline:none;
+    border-color:var(--plum);
+    box-shadow:0 0 0 3px rgba(107,78,113,0.15);
+  }
+  button.primary{
+    width:100%;
+    background:var(--plum);
+    color:var(--paper);
+    border:none;
+    border-radius:8px;
+    padding:14px;
+    font-size:15px;
+    font-weight:600;
+    cursor:pointer;
+    font-family:'Inter', sans-serif;
+  }
+  button.primary:hover{ background:#5B4260; }
+  button.primary:disabled{ opacity:0.55; cursor:default; }
+  button.secondary{
+    width:100%;
+    background:transparent;
+    color:var(--plum);
+    border:1.5px solid var(--plum);
+    border-radius:8px;
+    padding:11px;
+    font-size:13px;
+    font-weight:600;
+    cursor:pointer;
+    font-family:'Inter', sans-serif;
+    margin-bottom:14px;
+  }
+  #scanner{
+    margin-bottom:14px;
+    border-radius:10px;
+    overflow:hidden;
+    display:none;
+  }
+  #scanner.on{ display:block; }
+
+  .result{
+    margin-top:18px;
+    padding:16px;
+    border-radius:10px;
+    display:none;
+  }
+  .result.show{ display:block; }
+  .result-title{
+    font-family:'Fraunces', serif;
+    font-weight:600;
+    font-size:18px;
+    margin:0 0 4px;
+  }
+  .result-body{ font-size:13px; line-height:1.5; margin:0; }
+  .result.ok{ background:#E7F0E9; color:var(--ok); }
+  .result.warn{ background:#F7ECD9; color:var(--warn); }
+  .result.danger{ background:#F6E2E0; color:var(--danger); }
+
+  .locked-hint{
+    text-align:center;
+    font-size:12px;
+    color:#C9C6DC;
+    margin-top:16px;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <p class="eyebrow">Staff only</p>
+  <h1>Redeem a winning ticket</h1>
+
+  <div class="card">
+    <div class="field">
+      <label for="pin">Staff PIN</label>
+      <input type="password" id="pin" inputmode="numeric" placeholder="••••">
+    </div>
+
+    <div class="field">
+      <label for="ticketId">Ticket ID</label>
+      <input type="text" id="ticketId" placeholder="GVA-XXXXXX-XXXX" autocapitalize="characters">
+    </div>
+
+    <button type="button" class="secondary" id="scanToggle">Scan barcode instead</button>
+    <div id="scanner"></div>
+
+    <button type="button" class="primary" id="redeemBtn">Check &amp; redeem</button>
+
+    <div class="result" id="result">
+      <p class="result-title" id="resultTitle"></p>
+      <p class="result-body" id="resultBody"></p>
+    </div>
+  </div>
+
+  <p class="locked-hint">Each ticket can only be redeemed once. This check happens against the live entry sheet.</p>
+</div>
+
+<script>
+  const CONFIG = {
+    SHEET_ENDPOINT_URL: "https://script.google.com/macros/s/AKfycbzhENIrwrINZx_mhNRmAKVgxEHH_nRM7nl_C3hOv_K3ekCDwgoK2mhKTUjXsVXIbxYPqw/exec"
+  };
+
+  const pinInput = document.getElementById('pin');
+  const ticketInput = document.getElementById('ticketId');
+  const redeemBtn = document.getElementById('redeemBtn');
+  const scanToggle = document.getElementById('scanToggle');
+  const scannerBox = document.getElementById('scanner');
+  const result = document.getElementById('result');
+  const resultTitle = document.getElementById('resultTitle');
+  const resultBody = document.getElementById('resultBody');
+
+  let html5QrCode = null;
+  let scanning = false;
+
+  scanToggle.addEventListener('click', async () => {
+    if(scanning){
+      await stopScan();
+      return;
+    }
+    scannerBox.classList.add('on');
+    scanToggle.textContent = 'Stop scanning';
+    scanning = true;
+
+    html5QrCode = new Html5Qrcode("scanner");
+    try{
+      await html5QrCode.start(
+        { facingMode: "environment" },
+        { fps: 10, qrbox: { width: 260, height: 120 }, formatsToSupport: [ Html5QrcodeSupportedFormats.CODE_128 ] },
+        (decodedText) => {
+          ticketInput.value = decodedText.toUpperCase();
+          stopScan();
+        },
+        () => {}
+      );
+    }catch(err){
+      resultTitle.textContent = 'Camera unavailable';
+      resultBody.textContent = 'Could not access the camera. You can still type the ticket ID manually.';
+      result.className = 'result show danger';
+      await stopScan();
+    }
+  });
+
+  async function stopScan(){
+    if(html5QrCode){
+      try{ await html5QrCode.stop(); await html5QrCode.clear(); }catch(e){}
+    }
+    scannerBox.classList.remove('on');
+    scanToggle.textContent = 'Scan barcode instead';
+    scanning = false;
+  }
+
+  function showResult(cls, title, body){
+    result.className = 'result show ' + cls;
+    resultTitle.textContent = title;
+    resultBody.textContent = body;
+  }
+
+  redeemBtn.addEventListener('click', async () => {
+    const pin = pinInput.value.trim();
+    const ticketId = ticketInput.value.trim().toUpperCase();
+
+    if(!pin){ showResult('danger', 'PIN required', 'Enter the staff PIN before checking a ticket.'); return; }
+    if(!ticketId){ showResult('danger', 'Ticket ID required', 'Type or scan a ticket ID first.'); return; }
+
+    if(!CONFIG.SHEET_ENDPOINT_URL || CONFIG.SHEET_ENDPOINT_URL.indexOf('PASTE_YOUR') !== -1){
+      showResult('danger', 'Not connected', 'This page has not been connected to the sheet yet.');
+      return;
+    }
+
+    redeemBtn.disabled = true;
+    redeemBtn.textContent = 'Checking…';
+
+    try{
+      const res = await fetch(CONFIG.SHEET_ENDPOINT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify({ action: 'redeem', ticketId, pin })
+      });
+      const data = await res.json();
+
+      if(data.status === 'unauthorized'){
+        showResult('danger', 'Wrong PIN', 'That staff PIN was not recognized.');
+      } else if(data.status === 'not_found'){
+        showResult('danger', 'Ticket not found', 'No entry matches that ticket ID. Check for typos.');
+      } else if(data.status === 'not_winner'){
+        showResult('danger', 'Not a winning ticket', (data.name ? data.name + ' — ' : '') + 'this ticket was not marked as a winner.');
+      } else if(data.status === 'already_redeemed'){
+        showResult('warn', 'Already redeemed', (data.name ? data.name + ' — ' : '') + 'this ticket was already redeemed at ' + new Date(data.redeemedAt).toLocaleString() + '.');
+      } else if(data.status === 'redeemed'){
+        showResult('ok', 'Valid — redeemed', (data.name ? data.name + ' — ' : '') + 'this is a genuine, first-time redemption. Hand over the prize.');
+      } else {
+        showResult('danger', 'Unexpected response', 'Something went wrong reading the result. Try again.');
+      }
+    }catch(err){
+      showResult('danger', 'Connection error', 'Could not reach the sheet. Check your connection and try again.');
+    }
+
+    redeemBtn.disabled = false;
+    redeemBtn.textContent = 'Check & redeem';
+  });
+</script>
+</body>
+</html>

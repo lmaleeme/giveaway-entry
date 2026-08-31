@@ -21,7 +21,7 @@
     --danger:#C1443C;
   }
   *{box-sizing:border-box;}
-  html,body{margin:0;padding:0;}
+  html,body{margin:0;padding:0;overflow-x:hidden;}
   body{
     background:var(--deep);
     background-image:
@@ -82,6 +82,7 @@
     flex-direction:column;
     justify-content:space-between;
     position:relative;
+    min-width:0;
   }
   .perf{
     position:absolute;
@@ -119,7 +120,7 @@
     color:#8B87A8;
     margin-top:24px;
   }
-  .form-side{ padding:36px 32px; color:var(--ink); }
+  .form-side{ padding:36px 32px; color:var(--ink); min-width:0; }
   .form-side h2{
     font-family:'Fraunces', serif;
     font-weight:600;
@@ -237,8 +238,9 @@
   .submit-msg{ font-size:12px; margin-top:10px; text-align:center; display:none; }
   .submit-msg.err{ color:var(--danger); }
 
-  .success{ display:none; padding:36px 32px; text-align:center; }
+  .success{ display:none; padding:36px 32px; text-align:center; min-width:0; }
   .success.on{ display:block; }
+  #ticketBarcode{ max-width:100%; height:auto; }
   .form-side.hidden{ display:none; }
   .success h2{ font-family:'Fraunces', serif; font-size:24px; margin:0 0 8px; }
   .success p{ color:var(--ink-soft); font-size:14px; line-height:1.6; }

@@ -142,7 +142,7 @@
     margin-bottom:6px;
     letter-spacing:0.02em;
   }
-  input[type=text], input[type=tel]{
+  input[type=text], input[type=tel], select{
     width:100%;
     border:1.5px solid #DAD4C4;
     background:#FFFDF9;
@@ -152,13 +152,27 @@
     color:var(--ink);
     font-family:'Inter', sans-serif;
   }
-  input:focus{
+  select{
+    appearance:none;
+    -webkit-appearance:none;
+    background-image:url("data:image/svg+xml;charset=UTF-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%235A5570' stroke-width='1.6' fill='none' fill-rule='evenodd' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+    background-repeat:no-repeat;
+    background-position:right 14px center;
+    padding-right:34px;
+  }
+  input:focus, select:focus{
     outline:none;
     border-color:var(--plum);
     box-shadow:0 0 0 3px rgba(107,78,113,0.15);
   }
+  .optional-tag{
+    font-weight:400;
+    color:#9C97AF;
+    text-transform:none;
+    letter-spacing:0;
+  }
   .error{ color:var(--danger); font-size:12px; margin-top:5px; display:none; }
-  .field.invalid input{ border-color:var(--danger); }
+  .field.invalid input, .field.invalid select{ border-color:var(--danger); }
   .field.invalid .error{ display:block; }
 
   .loc-box{
@@ -183,6 +197,7 @@
     font-family:'Inter', sans-serif;
   }
   .loc-btn:hover{ background:rgba(107,78,113,0.08); }
+  .loc-btn:disabled{ opacity:0.6; cursor:default; }
   .loc-status{
     margin-top:10px;
     font-size:12px;
@@ -253,7 +268,7 @@
 
     <div class="form-side" id="formSide">
       <h2>Your details</h2>
-      <p class="hint">All fields marked required must be completed to enter.</p>
+      <p class="hint">Name and surname are required. Everything else is optional.</p>
 
       <form id="entryForm" novalidate>
         <div class="row">
@@ -270,9 +285,20 @@
         </div>
 
         <div class="field" id="fieldMobile">
-          <label for="mobile">Mobile number</label>
+          <label for="mobile">Mobile number <span class="optional-tag">(optional)</span></label>
           <input type="tel" id="mobile" autocomplete="tel" placeholder="082 123 4567">
-          <p class="error">Enter a valid mobile number.</p>
+          <p class="error">Enter a valid mobile number, or leave this blank.</p>
+        </div>
+
+        <div class="field" id="fieldGender">
+          <label for="gender">Gender <span class="optional-tag">(optional)</span></label>
+          <select id="gender">
+            <option value="" selected>Prefer not to select</option>
+            <option value="Male">Male</option>
+            <option value="Female">Female</option>
+            <option value="Do not wish to say">Do not wish to say</option>
+            <option value="Other pronoun">Other pronoun</option>
+          </select>
         </div>
 
         <div class="loc-box">
@@ -321,6 +347,7 @@
   const firstName = document.getElementById('firstName');
   const lastName = document.getElementById('lastName');
   const mobile = document.getElementById('mobile');
+  const gender = document.getElementById('gender');
   const ticketPreview = document.getElementById('ticketPreview');
   const locBtn = document.getElementById('locBtn');
   const locStatus = document.getElementById('locStatus');
@@ -331,7 +358,7 @@
   const submitErr = document.getElementById('submitErr');
   const downloadBtn = document.getElementById('downloadBtn');
 
-  let sharedLocation = null;
+  let sharedLocation = null; // { lat, lng, suburb }
   let ticketId = null;
 
   function genTicketId(){
@@ -353,6 +380,21 @@
   firstName.addEventListener('input', updatePreview);
   lastName.addEventListener('input', updatePreview);
 
+  // --- Reverse geocoding via OpenStreetMap Nominatim ---
+  // Browsers block scripts from setting a custom User-Agent header on fetch(),
+  // so we rely on the Referer header the browser sends automatically, which
+  // Nominatim's usage policy accepts as an identifier for browser-based apps.
+  async function reverseGeocode(lat, lng){
+    const url = 'https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat='
+      + encodeURIComponent(lat) + '&lon=' + encodeURIComponent(lng) + '&zoom=14&addressdetails=1';
+    const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
+    if(!res.ok) throw new Error('Reverse geocode failed: ' + res.status);
+    const data = await res.json();
+    const a = data.address || {};
+    return a.suburb || a.neighbourhood || a.quarter || a.city_district
+      || a.town || a.village || a.city || a.county || '';
+  }
+
   locBtn.addEventListener('click', () => {
     if(!navigator.geolocation){
       locText.textContent = 'Location not supported on this browser.';
@@ -362,14 +404,27 @@
     locBtn.disabled = true;
     locBtn.textContent = 'Requesting…';
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        sharedLocation = {
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude
-        };
+      async (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        sharedLocation = { lat: lat, lng: lng, suburb: '' };
+
         locText.textContent = 'Location added';
         locStatus.classList.add('on');
         locBtn.style.display = 'none';
+
+        try{
+          locText.textContent = 'Looking up suburb…';
+          const suburb = await reverseGeocode(lat, lng);
+          if(sharedLocation){ // still active (not cleared while we waited)
+            sharedLocation.suburb = suburb;
+            locText.textContent = suburb ? ('Location added — ' + suburb) : 'Location added';
+          }
+        }catch(e){
+          if(sharedLocation){
+            locText.textContent = 'Location added';
+          }
+        }
       },
       (err) => {
         locBtn.disabled = false;
@@ -399,8 +454,9 @@
     if(!firstName.value.trim()){ setInvalid('fieldFirst', true); ok = false; } else setInvalid('fieldFirst', false);
     if(!lastName.value.trim()){ setInvalid('fieldLast', true); ok = false; } else setInvalid('fieldLast', false);
 
+    // Mobile is optional — only validate format if something was entered.
     const digits = mobile.value.replace(/\D/g,'');
-    if(digits.length < 9){ setInvalid('fieldMobile', true); ok = false; } else setInvalid('fieldMobile', false);
+    if(mobile.value.trim() && digits.length < 9){ setInvalid('fieldMobile', true); ok = false; } else setInvalid('fieldMobile', false);
 
     const consent = document.getElementById('consent').checked;
     if(!consent){ setInvalid('fieldConsent', true); ok = false; } else setInvalid('fieldConsent', false);
@@ -427,8 +483,10 @@
       firstName: firstName.value.trim(),
       lastName: lastName.value.trim(),
       mobile: mobile.value.trim(),
+      gender: gender.value,
       latitude: sharedLocation ? sharedLocation.lat : '',
       longitude: sharedLocation ? sharedLocation.lng : '',
+      suburb: sharedLocation ? (sharedLocation.suburb || '') : '',
       submittedAt: new Date().toISOString()
     };
 

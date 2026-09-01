@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Campaign Report</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#12161B;
+    --panel:#1A2028;
+    --panel-alt:#20272F;
+    --border:#2A323C;
+    --text:#E7ECF1;
+    --text-mute:#8B96A3;
+    --accent:#E8A33D;
+    --accent-2:#4FB286;
+    --danger:#E2685C;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:'Inter',sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .num{font-family:'IBM Plex Mono',monospace;}
+
+  /* ---- PIN gate ---- */
+  #gate{
+    min-height:100vh;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:24px;
+  }
+  #gate .box{
+    width:100%;
+    max-width:320px;
+    text-align:left;
+  }
+  #gate h1{
+    font-size:20px;
+    margin:0 0 4px;
+  }
+  #gate p{
+    color:var(--text-mute);
+    font-size:14px;
+    margin:0 0 20px;
+  }
+  #gate input{
+    width:100%;
+    padding:12px 14px;
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:6px;
+    color:var(--text);
+    font-size:16px;
+    font-family:'IBM Plex Mono',monospace;
+    letter-spacing:2px;
+  }
+  #gate button{
+    width:100%;
+    margin-top:12px;
+    padding:12px 14px;
+    background:var(--accent);
+    border:none;
+    border-radius:6px;
+    color:#1A1305;
+    font-weight:600;
+    font-size:14px;
+    cursor:pointer;
+  }
+  #gateError{
+    color:var(--danger);
+    font-size:13px;
+    margin-top:10px;
+    display:none;
+  }
+
+  /* ---- Dashboard ---- */
+  #dashboard{display:none;}
+  header{
+    padding:20px 24px;
+    border-bottom:1px solid var(--border);
+    display:flex;
+    align-items:baseline;
+    justify-content:space-between;
+    flex-wrap:wrap;
+    gap:8px;
+  }
+  header h1{
+    font-size:17px;
+    margin:0;
+    font-weight:600;
+  }
+  header .updated{
+    color:var(--text-mute);
+    font-size:12px;
+  }
+
+  .filters{
+    padding:16px 24px;
+    border-bottom:1px solid var(--border);
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+    align-items:center;
+    background:var(--panel);
+  }
+  .filters .presets{display:flex;gap:6px;flex-wrap:wrap;}
+  .preset-btn{
+    padding:7px 12px;
+    background:var(--panel-alt);
+    border:1px solid var(--border);
+    border-radius:5px;
+    color:var(--text-mute);
+    font-size:13px;
+    cursor:pointer;
+  }
+  .preset-btn.active{
+    background:var(--accent);
+    color:#1A1305;
+    border-color:var(--accent);
+    font-weight:600;
+  }
+  .filters select, .filters input[type=date]{
+    padding:7px 10px;
+    background:var(--panel-alt);
+    border:1px solid var(--border);
+    border-radius:5px;
+    color:var(--text);
+    font-size:13px;
+  }
+  .custom-dates{display:none;gap:6px;align-items:center;}
+  .custom-dates.show{display:flex;}
+  .filters label{font-size:12px;color:var(--text-mute);}
+
+  main{padding:24px;max-width:960px;margin:0 auto;}
+  section{margin-bottom:36px;}
+  section h2{
+    font-size:13px;
+    color:var(--text-mute);
+    font-weight:600;
+    margin:0 0 12px;
+  }
+
+  .stat-grid{
+    display:grid;
+    grid-template-columns:repeat(auto-fit,minmax(140px,1fr));
+    gap:1px;
+    background:var(--border);
+    border:1px solid var(--border);
+    border-radius:8px;
+    overflow:hidden;
+  }
+  .stat{
+    background:var(--panel);
+    padding:16px;
+  }
+  .stat .val{
+    font-size:28px;
+    font-weight:600;
+  }
+  .stat .val.accent{color:var(--accent);}
+  .stat .lbl{
+    color:var(--text-mute);
+    font-size:12px;
+    margin-top:2px;
+  }
+
+  .split-row{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:24px;
+  }
+  @media (max-width:640px){.split-row{grid-template-columns:1fr;}}
+
+  .gender-bars{border:1px solid var(--border);border-radius:8px;padding:14px 16px;background:var(--panel);}
+  .gbar-row{margin-bottom:10px;}
+  .gbar-row:last-child{margin-bottom:0;}
+  .gbar-top{display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px;}
+  .gbar-track{height:6px;background:var(--panel-alt);border-radius:3px;overflow:hidden;}
+  .gbar-fill{height:100%;background:var(--accent);}
+
+  .daychart{border:1px solid var(--border);border-radius:8px;padding:16px;background:var(--panel);}
+  .daybar-row{display:flex;align-items:center;gap:10px;margin-bottom:6px;font-size:12px;}
+  .daybar-date{width:78px;color:var(--text-mute);flex-shrink:0;}
+  .daybar-track{flex:1;background:var(--panel-alt);border-radius:3px;height:14px;position:relative;}
+  .daybar-fill{height:100%;background:var(--accent-2);border-radius:3px;}
+  .daybar-count{width:32px;text-align:right;flex-shrink:0;}
+
+  .empty{color:var(--text-mute);font-size:13px;padding:12px 0;}
+  #loadError{color:var(--danger);font-size:13px;padding:12px 0;display:none;}
+</style>
+</head>
+<body>
+
+<div id="gate">
+  <div class="box">
+    <h1>Report dashboard</h1>
+    <p>Enter the staff PIN to continue.</p>
+    <input type="password" id="pinInput" inputmode="numeric" placeholder="PIN" maxlength="12">
+    <button onclick="checkPin()">Unlock</button>
+    <div id="gateError">Incorrect PIN.</div>
+  </div>
+</div>
+
+<div id="dashboard">
+  <header>
+    <h1>Campaign report</h1>
+    <div class="updated" id="updatedAt"></div>
+  </header>
+
+  <div class="filters">
+    <div class="presets">
+      <button class="preset-btn active" data-preset="today" onclick="setPreset('today')">Today (12pm&ndash;12pm)</button>
+      <button class="preset-btn" data-preset="week" onclick="setPreset('week')">This week</button>
+      <button class="preset-btn" data-preset="campaign" onclick="setPreset('campaign')">Full campaign</button>
+      <button class="preset-btn" data-preset="custom" onclick="setPreset('custom')">Custom</button>
+    </div>
+    <div class="custom-dates" id="customDates">
+      <label>From</label><input type="date" id="startDate">
+      <label>To</label><input type="date" id="endDate">
+    </div>
+    <label>Gender</label>
+    <select id="genderFilter" onchange="loadReport()">
+      <option value="All">All</option>
+    </select>
+  </div>
+
+  <main>
+    <div id="loadError">Couldn't load the report. Check the PIN and your connection, then reload the page.</div>
+
+    <section>
+      <h2>Selected period</h2>
+      <div class="stat-grid">
+        <div class="stat"><div class="val accent" id="periodTotal">&mdash;</div><div class="lbl">Total entries</div></div>
+        <div class="stat"><div class="val" id="periodUnique">&mdash;</div><div class="lbl">Unique entrants (by mobile)</div></div>
+        <div class="stat"><div class="val" id="periodWinners">&mdash;</div><div class="lbl">Winners marked</div></div>
+        <div class="stat"><div class="val" id="periodRedeemed">&mdash;</div><div class="lbl">Redeemed</div></div>
+      </div>
+    </section>
+
+    <section class="split-row">
+      <div>
+        <h2>Gender breakdown &mdash; selected period</h2>
+        <div class="gender-bars" id="genderBars"></div>
+      </div>
+      <div>
+        <h2>Entries per day &mdash; selected period</h2>
+        <div class="daychart" id="dayChart"></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Weekly progress (last 7 days, fixed window)</h2>
+      <div class="stat-grid">
+        <div class="stat"><div class="val" id="weekTotal">&mdash;</div><div class="lbl">Total entries</div></div>
+        <div class="stat"><div class="val" id="weekUnique">&mdash;</div><div class="lbl">Unique entrants</div></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Campaign to date (all time)</h2>
+      <div class="stat-grid">
+        <div class="stat"><div class="val" id="campTotal">&mdash;</div><div class="lbl">Total entries</div></div>
+        <div class="stat"><div class="val" id="campUnique">&mdash;</div><div class="lbl">Unique entrants</div></div>
+        <div class="stat"><div class="val" id="campWinners">&mdash;</div><div class="lbl">Winners marked</div></div>
+        <div class="stat"><div class="val" id="campRedeemed">&mdash;</div><div class="lbl">Redeemed</div></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script>
+  const APPS_SCRIPT_URL = "PASTE_YOUR_APPS_SCRIPT_URL_HERE";
+  let PIN = "";
+  let currentPreset = "today";
+
+  function checkPin(){
+    const val = document.getElementById('pinInput').value.trim();
+    if(!val){ return; }
+    PIN = val;
+    document.getElementById('gateError').style.display = 'none';
+    loadReport(true);
+  }
+
+  document.getElementById('pinInput').addEventListener('keydown', function(e){
+    if(e.key === 'Enter') checkPin();
+  });
+
+  function setPreset(preset){
+    currentPreset = preset;
+    document.querySelectorAll('.preset-btn').forEach(b => b.classList.toggle('active', b.dataset.preset === preset));
+    document.getElementById('customDates').classList.toggle('show', preset === 'custom');
+    if(preset !== 'custom') loadReport();
+  }
+
+  document.getElementById('startDate').addEventListener('change', () => { if(currentPreset==='custom') loadReport(); });
+  document.getElementById('endDate').addEventListener('change', () => { if(currentPreset==='custom') loadReport(); });
+
+  function getRange(){
+    const now = new Date();
+    if(currentPreset === 'today'){
+      let end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 12, 0, 0, 0);
+      if(now < end) end.setDate(end.getDate() - 1);
+      const start = new Date(end.getTime() - 24*60*60*1000);
+      return { start: start.toISOString(), end: end.toISOString() };
+    }
+    if(currentPreset === 'week'){
+      const start = new Date(now.getTime() - 7*24*60*60*1000);
+      return { start: start.toISOString(), end: now.toISOString() };
+    }
+    if(currentPreset === 'campaign'){
+      return { start: null, end: null };
+    }
+    // custom
+    const s = document.getElementById('startDate').value;
+    const e = document.getElementById('endDate').value;
+    return {
+      start: s ? new Date(s + 'T00:00:00').toISOString() : null,
+      end: e ? new Date(e + 'T23:59:59').toISOString() : null
+    };
+  }
+
+  async function loadReport(isFirstLoad){
+    const range = getRange();
+    const gender = document.getElementById('genderFilter').value;
+    document.getElementById('loadError').style.display = 'none';
+
+    try{
+      const res = await fetch(APPS_SCRIPT_URL, {
+        method: 'POST',
+        body: JSON.stringify({ action: 'report', pin: PIN, start: range.start, end: range.end, gender: gender })
+      });
+      const data = await res.json();
+
+      if(data.status === 'unauthorized'){
+        if(isFirstLoad){
+          document.getElementById('gateError').style.display = 'block';
+        } else {
+          document.getElementById('loadError').style.display = 'block';
+        }
+        return;
+      }
+
+      document.getElementById('gate').style.display = 'none';
+      document.getElementById('dashboard').style.display = 'block';
+
+      if(isFirstLoad){
+        const sel = document.getElementById('genderFilter');
+        (data.genderOptionsAvailable || []).forEach(g => {
+          const opt = document.createElement('option');
+          opt.value = g; opt.textContent = g;
+          sel.appendChild(opt);
+        });
+      }
+
+      render(data);
+    } catch(err){
+      document.getElementById('loadError').style.display = 'block';
+    }
+  }
+
+  function render(data){
+    document.getElementById('updatedAt').textContent = 'Updated ' + new Date(data.generatedAt).toLocaleString();
+
+    document.getElementById('periodTotal').textContent = data.period.totalEntries;
+    document.getElementById('periodUnique').textContent = data.period.uniqueEntrants;
+    document.getElementById('periodWinners').textContent = data.period.winners;
+    document.getElementById('periodRedeemed').textContent = data.period.redeemed;
+
+    document.getElementById('weekTotal').textContent = data.weekly.totalEntries;
+    document.getElementById('weekUnique').textContent = data.weekly.uniqueEntrants;
+
+    document.getElementById('campTotal').textContent = data.campaign.totalEntries;
+    document.getElementById('campUnique').textContent = data.campaign.uniqueEntrants;
+    document.getElementById('campWinners').textContent = data.campaign.winners;
+    document.getElementById('campRedeemed').textContent = data.campaign.redeemed;
+
+    // gender bars
+    const genderEl = document.getElementById('genderBars');
+    const genderEntries = Object.entries(data.period.genderBreakdown || {});
+    if(genderEntries.length === 0){
+      genderEl.innerHTML = '<div class="empty">No entries in this period.</div>';
+    } else {
+      const max = Math.max(...genderEntries.map(e => e[1]));
+      genderEl.innerHTML = genderEntries.map(([g,count]) => `
+        <div class="gbar-row">
+          <div class="gbar-top"><span>${g}</span><span class="num">${count}</span></div>
+          <div class="gbar-track"><div class="gbar-fill" style="width:${max ? (count/max*100) : 0}%"></div></div>
+        </div>
+      `).join('');
+    }
+
+    // per day chart
+    const dayEl = document.getElementById('dayChart');
+    const days = data.period.entriesPerDay || [];
+    if(days.length === 0){
+      dayEl.innerHTML = '<div class="empty">No entries in this period.</div>';
+    } else {
+      const max = Math.max(...days.map(d => d.entries));
+      dayEl.innerHTML = days.map(d => `
+        <div class="daybar-row">
+          <div class="daybar-date">${d.date}</div>
+          <div class="daybar-track"><div class="daybar-fill" style="width:${max ? (d.entries/max*100) : 0}%"></div></div>
+          <div class="daybar-count num">${d.entries}</div>
+        </div>
+      `).join('');
+    }
+  }
+</script>
+
+</body>
+</html>

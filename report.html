@@ -79,6 +79,9 @@
     margin-top:10px;
     display:none;
   }
+  #gateError.info{
+    color:var(--text-mute);
+  }
 
   /* ---- Dashboard ---- */
   #dashboard{display:none;}
@@ -203,8 +206,8 @@
     <h1>Report dashboard</h1>
     <p>Enter the staff PIN to continue.</p>
     <input type="password" id="pinInput" inputmode="numeric" placeholder="PIN" maxlength="12">
-    <button onclick="checkPin()">Unlock</button>
-    <div id="gateError">Incorrect PIN.</div>
+    <button id="unlockBtn" onclick="checkPin()">Unlock</button>
+    <div id="gateError"></div>
   </div>
 </div>
 
@@ -284,7 +287,11 @@
     const val = document.getElementById('pinInput').value.trim();
     if(!val){ return; }
     PIN = val;
-    document.getElementById('gateError').style.display = 'none';
+    const gateError = document.getElementById('gateError');
+    gateError.style.display = 'none';
+    gateError.classList.remove('info');
+    document.getElementById('unlockBtn').textContent = 'Checking\u2026';
+    document.getElementById('unlockBtn').disabled = true;
     loadReport(true);
   }
 
@@ -331,16 +338,37 @@
     const gender = document.getElementById('genderFilter').value;
     document.getElementById('loadError').style.display = 'none';
 
+    if(!APPS_SCRIPT_URL || APPS_SCRIPT_URL.indexOf('PASTE_YOUR') === 0){
+      failFirstLoad('The Apps Script URL hasn\u2019t been set in report.html yet.');
+      return;
+    }
+
     try{
       const res = await fetch(APPS_SCRIPT_URL, {
         method: 'POST',
         body: JSON.stringify({ action: 'report', pin: PIN, start: range.start, end: range.end, gender: gender })
       });
-      const data = await res.json();
+
+      if(!res.ok){
+        failFirstLoad('Server returned an error (status ' + res.status + '). Check the Apps Script deployment.');
+        return;
+      }
+
+      let data;
+      try{
+        data = await res.json();
+      } catch(parseErr){
+        failFirstLoad('Got a response that wasn\u2019t valid JSON \u2014 the Apps Script deployment may be pointing at an old version.');
+        return;
+      }
 
       if(data.status === 'unauthorized'){
         if(isFirstLoad){
-          document.getElementById('gateError').style.display = 'block';
+          resetUnlockButton();
+          const gateError = document.getElementById('gateError');
+          gateError.textContent = 'Incorrect PIN.';
+          gateError.classList.remove('info');
+          gateError.style.display = 'block';
         } else {
           document.getElementById('loadError').style.display = 'block';
         }
@@ -361,8 +389,27 @@
 
       render(data);
     } catch(err){
-      document.getElementById('loadError').style.display = 'block';
+      console.error('Report load failed:', err);
+      if(isFirstLoad){
+        failFirstLoad('Couldn\u2019t reach the Apps Script (network or CORS error). Check the URL and deployment settings, or open the browser console for details.');
+      } else {
+        document.getElementById('loadError').style.display = 'block';
+      }
     }
+  }
+
+  function failFirstLoad(message){
+    resetUnlockButton();
+    const gateError = document.getElementById('gateError');
+    gateError.textContent = message;
+    gateError.classList.add('info');
+    gateError.style.display = 'block';
+  }
+
+  function resetUnlockButton(){
+    const btn = document.getElementById('unlockBtn');
+    btn.textContent = 'Unlock';
+    btn.disabled = false;
   }
 
   function render(data){

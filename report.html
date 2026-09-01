@@ -195,6 +195,31 @@
   .daybar-fill{height:100%;background:var(--accent-2);border-radius:3px;}
   .daybar-count{width:32px;text-align:right;flex-shrink:0;}
 
+  .loc-table-wrap{border:1px solid var(--border);border-radius:8px;background:var(--panel);overflow-x:auto;}
+  table.loc-table{border-collapse:collapse;width:100%;font-size:13px;}
+  table.loc-table th, table.loc-table td{
+    padding:9px 14px;
+    text-align:right;
+    white-space:nowrap;
+    border-bottom:1px solid var(--border);
+  }
+  table.loc-table th{
+    color:var(--text-mute);
+    font-weight:500;
+    font-size:12px;
+  }
+  table.loc-table th:first-child, table.loc-table td:first-child{
+    text-align:left;
+    position:sticky;
+    left:0;
+    background:var(--panel);
+  }
+  table.loc-table tr:last-child td{border-bottom:none;}
+  table.loc-table td.total{font-family:'IBM Plex Mono',monospace;color:var(--accent);}
+  table.loc-table td.num{font-family:'IBM Plex Mono',monospace;}
+  table.loc-table tbody tr{cursor:pointer;}
+  table.loc-table tbody tr:hover{background:var(--panel-alt);}
+
   .empty{color:var(--text-mute);font-size:13px;padding:12px 0;}
   #loadError{color:var(--danger);font-size:13px;padding:12px 0;display:none;}
 </style>
@@ -232,6 +257,10 @@
     <select id="genderFilter" onchange="loadReport()">
       <option value="All">All</option>
     </select>
+    <label>Location</label>
+    <select id="locationFilter" onchange="loadReport()">
+      <option value="All">All</option>
+    </select>
   </div>
 
   <main>
@@ -259,6 +288,13 @@
     </section>
 
     <section>
+      <h2>Entries by location &mdash; selected period</h2>
+      <div class="loc-table-wrap">
+        <table class="loc-table" id="locationTable"></table>
+      </div>
+    </section>
+
+    <section>
       <h2>Weekly progress (last 7 days, fixed window)</h2>
       <div class="stat-grid">
         <div class="stat"><div class="val" id="weekTotal">&mdash;</div><div class="lbl">Total entries</div></div>
@@ -279,9 +315,10 @@
 </div>
 
 <script>
-  const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzhENIrwrINZx_mhNRmAKVgxEHH_nRM7nl_C3hOv_K3ekCDwgoK2mhKTUjXsVXIbxYPqw/exec";
+  const APPS_SCRIPT_URL = "PASTE_YOUR_APPS_SCRIPT_URL_HERE";
   let PIN = "";
   let currentPreset = "today";
+  let knownGenders = [];
 
   function checkPin(){
     const val = document.getElementById('pinInput').value.trim();
@@ -336,6 +373,7 @@
   async function loadReport(isFirstLoad){
     const range = getRange();
     const gender = document.getElementById('genderFilter').value;
+    const location = document.getElementById('locationFilter').value;
     document.getElementById('loadError').style.display = 'none';
 
     if(!APPS_SCRIPT_URL || APPS_SCRIPT_URL.indexOf('PASTE_YOUR') === 0){
@@ -346,7 +384,7 @@
     try{
       const res = await fetch(APPS_SCRIPT_URL, {
         method: 'POST',
-        body: JSON.stringify({ action: 'report', pin: PIN, start: range.start, end: range.end, gender: gender })
+        body: JSON.stringify({ action: 'report', pin: PIN, start: range.start, end: range.end, gender: gender, location: location })
       });
 
       if(!res.ok){
@@ -379,12 +417,21 @@
       document.getElementById('dashboard').style.display = 'block';
 
       if(isFirstLoad){
-        const sel = document.getElementById('genderFilter');
+        const genderSel = document.getElementById('genderFilter');
         (data.genderOptionsAvailable || []).forEach(g => {
           const opt = document.createElement('option');
           opt.value = g; opt.textContent = g;
-          sel.appendChild(opt);
+          genderSel.appendChild(opt);
         });
+
+        const locSel = document.getElementById('locationFilter');
+        (data.locationOptionsAvailable || []).forEach(l => {
+          const opt = document.createElement('option');
+          opt.value = l; opt.textContent = l;
+          locSel.appendChild(opt);
+        });
+
+        knownGenders = data.genderOptionsAvailable || [];
       }
 
       render(data);
@@ -458,6 +505,40 @@
         </div>
       `).join('');
     }
+
+    renderLocationTable(data.period.locationBreakdown || []);
+  }
+
+  function renderLocationTable(locations){
+    const table = document.getElementById('locationTable');
+    if(locations.length === 0){
+      table.innerHTML = '<tbody><tr><td class="empty" style="text-align:left;border-bottom:none">No entries in this period.</td></tr></tbody>';
+      return;
+    }
+
+    const genderCols = knownGenders.length ? knownGenders : Array.from(
+      new Set(locations.flatMap(l => Object.keys(l.genders || {})))
+    );
+
+    const head = '<thead><tr><th>Location</th><th>Total</th>' +
+      genderCols.map(g => `<th>${g}</th>`).join('') + '</tr></thead>';
+
+    const body = '<tbody>' + locations.map(l => {
+      const cells = genderCols.map(g => `<td class="num">${(l.genders && l.genders[g]) || 0}</td>`).join('');
+      return `<tr onclick="drillIntoLocation('${l.location.replace(/'/g, "\\'")}')">
+        <td>${l.location}</td>
+        <td class="total">${l.total}</td>
+        ${cells}
+      </tr>`;
+    }).join('') + '</tbody>';
+
+    table.innerHTML = head + body;
+  }
+
+  function drillIntoLocation(location){
+    const sel = document.getElementById('locationFilter');
+    sel.value = location;
+    loadReport();
   }
 </script>
 

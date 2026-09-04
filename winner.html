@@ -199,8 +199,8 @@
 </div>
 
 <script>
-  // Same Web App URL used by redeem.html and report.html
-  const API_URL = "PASTE_YOUR_APPS_SCRIPT_WEB_APP_URL_HERE";
+  // Same Web App URL used by index.html, redeem.html and report.html
+  const API_URL = "https://script.google.com/macros/s/AKfycbzhENIrwrINZx_mhNRmAKVgxEHH_nRM7nl_C3hOv_K3ekCDwgoK2mhKTUjXsVXIbxYPqw/exec";
 
   let sessionPin = "";
   let lastPreviewWinners = [];
@@ -310,7 +310,7 @@
     body.innerHTML = winners.map(w => `
       <tr>
         <td>${w.ticketId}</td>
-        <td>${w.firstName} ${w.surname}</td>
+        <td>${w.firstName} ${w.lastName}</td>
         <td>${w.mobile || "—"}</td>
         <td>${w.suburb || "—"}</td>
       </tr>

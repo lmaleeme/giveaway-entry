@@ -223,13 +223,13 @@
 
     postToScript({ action: "winnerStats", pin })
       .then(res => {
-        if (res.success) {
+        if (res.status === "ok") {
           sessionPin = pin;
           document.getElementById("pinScreen").classList.add("hidden");
           document.getElementById("mainScreen").classList.remove("hidden");
           renderStats(res);
         } else {
-          errEl.textContent = res.error || "Incorrect PIN.";
+          errEl.textContent = res.status === "unauthorized" ? "Incorrect PIN." : (res.message || "Something went wrong.");
           errEl.classList.remove("hidden");
         }
       })
@@ -247,7 +247,7 @@
 
   function refreshStats() {
     postToScript({ action: "winnerStats", pin: sessionPin }).then(res => {
-      if (res.success) renderStats(res);
+      if (res.status === "ok") renderStats(res);
     });
   }
 
@@ -286,8 +286,8 @@
         btn.disabled = false;
         btn.textContent = "Draw Winners";
 
-        if (!res.success) {
-          errEl.textContent = res.error || "Draw failed.";
+        if (res.status !== "ok") {
+          errEl.textContent = res.message || "Draw failed.";
           errEl.classList.remove("hidden");
           return;
         }
@@ -339,8 +339,8 @@
         btn.disabled = false;
         btn.textContent = "Confirm & Save";
 
-        if (!res.success) {
-          alert(res.error || "Could not save winners.");
+        if (res.status !== "ok") {
+          alert(res.message || "Could not save winners.");
           return;
         }
 

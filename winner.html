@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Winner Selection</title>
+<style>
+  :root {
+    --bg: #0f1115;
+    --panel: #171a21;
+    --panel-2: #1e2229;
+    --border: #2a2f38;
+    --text: #eef1f6;
+    --muted: #9aa3b2;
+    --accent: #4f7cff;
+    --accent-2: #3a63e0;
+    --good: #34c471;
+    --bad: #ef5757;
+    --warn: #e0a63a;
+    --radius: 12px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    padding: 24px 16px 60px;
+  }
+  .wrap { width: 100%; max-width: 640px; min-width: 0; }
+  h1 { font-size: 1.4rem; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 0.9rem; margin-bottom: 24px; }
+
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-bottom: 16px;
+    min-width: 0;
+  }
+
+  label { display: block; font-size: 0.85rem; color: var(--muted); margin-bottom: 6px; }
+  input[type="password"], input[type="number"] {
+    width: 100%;
+    padding: 12px 14px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+    background: var(--panel-2);
+    color: var(--text);
+    font-size: 1rem;
+    min-width: 0;
+  }
+  input:focus { outline: none; border-color: var(--accent); }
+
+  button {
+    border: none;
+    border-radius: 8px;
+    padding: 12px 18px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    cursor: pointer;
+    width: 100%;
+  }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: var(--accent-2); }
+  .btn-primary:disabled { background: #3a3f4b; color: var(--muted); cursor: not-allowed; }
+  .btn-secondary { background: var(--panel-2); color: var(--text); border: 1px solid var(--border); margin-top: 8px; }
+  .btn-danger { background: var(--bad); color: #fff; }
+
+  .row { display: flex; gap: 12px; min-width: 0; }
+  .row > * { flex: 1; min-width: 0; }
+
+  .stats-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 4px;
+  }
+  .stat { background: var(--panel-2); border-radius: 10px; padding: 12px; text-align: center; min-width: 0; }
+  .stat .num { font-size: 1.4rem; font-weight: 700; }
+  .stat .lbl { font-size: 0.72rem; color: var(--muted); margin-top: 2px; }
+
+  .radio-group { display: flex; flex-direction: column; gap: 10px; margin: 6px 0 18px; }
+  .radio-option {
+    display: flex; align-items: flex-start; gap: 10px;
+    background: var(--panel-2); border: 1px solid var(--border);
+    border-radius: 8px; padding: 12px 14px; cursor: pointer;
+  }
+  .radio-option input { margin-top: 3px; width: auto; }
+  .radio-option .opt-title { font-size: 0.92rem; font-weight: 600; }
+  .radio-option .opt-desc { font-size: 0.8rem; color: var(--muted); margin-top: 2px; }
+  .radio-option.selected { border-color: var(--accent); }
+
+  table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+  th, td { text-align: left; padding: 9px 8px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 600; font-size: 0.75rem; text-transform: uppercase; }
+
+  .msg { padding: 12px 14px; border-radius: 8px; font-size: 0.88rem; margin-bottom: 14px; }
+  .msg-error { background: rgba(239,87,87,0.12); color: #ff9c9c; border: 1px solid rgba(239,87,87,0.3); }
+  .msg-success { background: rgba(52,196,113,0.12); color: #7fe3ab; border: 1px solid rgba(52,196,113,0.3); }
+  .msg-warn { background: rgba(224,166,58,0.12); color: #f0c477; border: 1px solid rgba(224,166,58,0.3); }
+
+  .hidden { display: none; }
+  .spinner {
+    width: 16px; height: 16px; border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff;
+    display: inline-block; animation: spin 0.7s linear infinite; margin-right: 8px;
+    vertical-align: middle;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .table-wrap { overflow-x: auto; min-width: 0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- PIN GATE -->
+  <div id="pinScreen">
+    <h1>🎟️ Winner Selection</h1>
+    <div class="sub">Staff access only.</div>
+    <div class="card">
+      <label for="pinInput">Enter Draw PIN</label>
+      <input type="password" id="pinInput" inputmode="numeric" placeholder="••••" />
+      <div id="pinError" class="msg msg-error hidden" style="margin-top:12px;"></div>
+      <button class="btn-primary" style="margin-top:14px;" onclick="checkPin()">Unlock</button>
+    </div>
+  </div>
+
+  <!-- MAIN PANEL -->
+  <div id="mainScreen" class="hidden">
+    <h1>🎟️ Winner Selection</h1>
+    <div class="sub">Randomly select winners from eligible entries.</div>
+
+    <div class="card">
+      <div class="stats-grid" id="statsGrid">
+        <div class="stat"><div class="num" id="statEligible">–</div><div class="lbl">Eligible entries</div></div>
+        <div class="stat"><div class="num" id="statUnique">–</div><div class="lbl">Eligible people</div></div>
+        <div class="stat"><div class="num" id="statWinners">–</div><div class="lbl">Winners so far</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <label for="countInput">Number of winners to select</label>
+      <input type="number" id="countInput" min="1" step="1" placeholder="e.g. 5" />
+
+      <div class="radio-group" style="margin-top:16px;">
+        <label class="radio-option selected" id="optUnlimited">
+          <input type="radio" name="mode" value="unlimited" checked onchange="updateModeSelection()" />
+          <div>
+            <div class="opt-title">No limit per person</div>
+            <div class="opt-desc">Every ticket is an independent chance, even for repeat entrants.</div>
+          </div>
+        </label>
+        <label class="radio-option" id="optUnique">
+          <input type="radio" name="mode" value="unique" onchange="updateModeSelection()" />
+          <div>
+            <div class="opt-title">One winner per unique mobile number</div>
+            <div class="opt-desc">Each person can only be drawn once, regardless of ticket count.</div>
+          </div>
+        </label>
+      </div>
+
+      <div id="drawError" class="msg msg-error hidden"></div>
+      <button class="btn-primary" id="drawBtn" onclick="drawWinners()">Draw Winners</button>
+    </div>
+
+    <!-- PREVIEW RESULTS -->
+    <div class="card hidden" id="previewCard">
+      <div class="msg msg-warn">This is a preview. Nothing has been saved yet.</div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Ticket ID</th><th>Name</th><th>Mobile</th><th>Suburb</th></tr></thead>
+          <tbody id="previewBody"></tbody>
+        </table>
+      </div>
+      <div class="row" style="margin-top:16px;">
+        <button class="btn-secondary" onclick="redraw()">Redraw</button>
+        <button class="btn-primary" id="confirmBtn" onclick="confirmWinners()">Confirm &amp; Save</button>
+      </div>
+    </div>
+
+    <!-- SUCCESS -->
+    <div class="card hidden" id="successCard">
+      <div class="msg msg-success" id="successMsg"></div>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Ticket ID</th><th>Name</th><th>Mobile</th><th>Suburb</th></tr></thead>
+          <tbody id="successBody"></tbody>
+        </table>
+      </div>
+      <button class="btn-secondary" style="margin-top:16px;" onclick="resetPanel()">Run Another Draw</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Same Web App URL used by redeem.html and report.html
+  const API_URL = "PASTE_YOUR_APPS_SCRIPT_WEB_APP_URL_HERE";
+
+  let sessionPin = "";
+  let lastPreviewWinners = [];
+  let lastDrawParams = {};
+
+  function postToScript(payload) {
+    return fetch(API_URL, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" }, // avoids CORS preflight, matches existing pages
+      body: JSON.stringify(payload)
+    }).then(r => r.json());
+  }
+
+  function checkPin() {
+    const pin = document.getElementById("pinInput").value.trim();
+    const errEl = document.getElementById("pinError");
+    errEl.classList.add("hidden");
+
+    if (!pin) return;
+
+    postToScript({ action: "winnerStats", pin })
+      .then(res => {
+        if (res.success) {
+          sessionPin = pin;
+          document.getElementById("pinScreen").classList.add("hidden");
+          document.getElementById("mainScreen").classList.remove("hidden");
+          renderStats(res);
+        } else {
+          errEl.textContent = res.error || "Incorrect PIN.";
+          errEl.classList.remove("hidden");
+        }
+      })
+      .catch(() => {
+        errEl.textContent = "Could not reach the server. Check your connection.";
+        errEl.classList.remove("hidden");
+      });
+  }
+
+  function renderStats(res) {
+    document.getElementById("statEligible").textContent = res.eligibleCount;
+    document.getElementById("statUnique").textContent = res.eligibleUniqueMobiles;
+    document.getElementById("statWinners").textContent = res.winnersSoFar;
+  }
+
+  function refreshStats() {
+    postToScript({ action: "winnerStats", pin: sessionPin }).then(res => {
+      if (res.success) renderStats(res);
+    });
+  }
+
+  function updateModeSelection() {
+    const unlimited = document.querySelector('input[name="mode"][value="unlimited"]').checked;
+    document.getElementById("optUnlimited").classList.toggle("selected", unlimited);
+    document.getElementById("optUnique").classList.toggle("selected", !unlimited);
+  }
+
+  function drawWinners() {
+    const count = parseInt(document.getElementById("countInput").value, 10);
+    const uniquePerMobile = document.querySelector('input[name="mode"][value="unique"]').checked;
+    const errEl = document.getElementById("drawError");
+    errEl.classList.add("hidden");
+
+    if (!count || count < 1) {
+      errEl.textContent = "Enter a valid number of winners.";
+      errEl.classList.remove("hidden");
+      return;
+    }
+
+    const btn = document.getElementById("drawBtn");
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>Drawing...';
+
+    lastDrawParams = { count, uniquePerMobile };
+
+    postToScript({
+      action: "drawWinners",
+      pin: sessionPin,
+      mode: "preview",
+      count,
+      uniquePerMobile
+    })
+      .then(res => {
+        btn.disabled = false;
+        btn.textContent = "Draw Winners";
+
+        if (!res.success) {
+          errEl.textContent = res.error || "Draw failed.";
+          errEl.classList.remove("hidden");
+          return;
+        }
+
+        lastPreviewWinners = res.winners;
+        renderPreview(res.winners);
+        document.getElementById("previewCard").classList.remove("hidden");
+        document.getElementById("previewCard").scrollIntoView({ behavior: "smooth" });
+      })
+      .catch(() => {
+        btn.disabled = false;
+        btn.textContent = "Draw Winners";
+        errEl.textContent = "Could not reach the server.";
+        errEl.classList.remove("hidden");
+      });
+  }
+
+  function renderPreview(winners) {
+    const body = document.getElementById("previewBody");
+    body.innerHTML = winners.map(w => `
+      <tr>
+        <td>${w.ticketId}</td>
+        <td>${w.firstName} ${w.surname}</td>
+        <td>${w.mobile || "—"}</td>
+        <td>${w.suburb || "—"}</td>
+      </tr>
+    `).join("");
+  }
+
+  function redraw() {
+    document.getElementById("previewCard").classList.add("hidden");
+    drawWinners();
+  }
+
+  function confirmWinners() {
+    const btn = document.getElementById("confirmBtn");
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>Saving...';
+
+    postToScript({
+      action: "drawWinners",
+      pin: sessionPin,
+      mode: "commit",
+      count: lastDrawParams.count,
+      uniquePerMobile: lastDrawParams.uniquePerMobile,
+      ticketIds: lastPreviewWinners.map(w => w.ticketId)
+    })
+      .then(res => {
+        btn.disabled = false;
+        btn.textContent = "Confirm & Save";
+
+        if (!res.success) {
+          alert(res.error || "Could not save winners.");
+          return;
+        }
+
+        document.getElementById("previewCard").classList.add("hidden");
+        document.getElementById("successCard").classList.remove("hidden");
+
+        let msg = `${res.committedCount} winner(s) saved to the sheet.`;
+        if (res.skipped > 0) {
+          msg += ` ${res.skipped} ticket(s) were skipped because their status changed since the preview.`;
+        }
+        document.getElementById("successMsg").textContent = msg;
+        document.getElementById("successBody").innerHTML = document.getElementById("previewBody").innerHTML;
+
+        refreshStats();
+      })
+      .catch(() => {
+        btn.disabled = false;
+        btn.textContent = "Confirm & Save";
+        alert("Could not reach the server.");
+      });
+  }
+
+  function resetPanel() {
+    document.getElementById("successCard").classList.add("hidden");
+    document.getElementById("countInput").value = "";
+    lastPreviewWinners = [];
+    lastDrawParams = {};
+  }
+</script>
+</body>
+</html>

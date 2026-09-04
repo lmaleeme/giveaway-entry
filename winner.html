@@ -193,6 +193,7 @@
           <tbody id="successBody"></tbody>
         </table>
       </div>
+      <p style="font-size:0.78rem; color:var(--muted); margin-top:10px;">Full mobile numbers shown here for winner follow-up. Also recorded in the sheet.</p>
       <button class="btn-secondary" style="margin-top:16px;" onclick="resetPanel()">Run Another Draw</button>
     </div>
   </div>
@@ -352,7 +353,14 @@
           msg += ` ${res.skipped} ticket(s) were skipped because their status changed since the preview.`;
         }
         document.getElementById("successMsg").textContent = msg;
-        document.getElementById("successBody").innerHTML = document.getElementById("previewBody").innerHTML;
+        document.getElementById("successBody").innerHTML = res.winners.map(w => `
+          <tr>
+            <td>${w.ticketId}</td>
+            <td>${w.firstName} ${w.lastName}</td>
+            <td>${w.mobile || "—"}</td>
+            <td>${w.suburb || "—"}</td>
+          </tr>
+        `).join("");
 
         refreshStats();
       })

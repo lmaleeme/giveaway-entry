@@ -36,6 +36,9 @@
     padding:40px 16px;
   }
   .wrap{ width:100%; max-width:880px; }
+  .logo-wrap{ display:none; text-align:center; margin-bottom:18px; }
+  .logo-wrap.on{ display:block; }
+  .logo-wrap img{ max-height:56px; max-width:220px; }
   .eyebrow{
     font-family:'IBM Plex Mono', monospace;
     font-size:12px;
@@ -143,7 +146,7 @@
     margin-bottom:6px;
     letter-spacing:0.02em;
   }
-  input[type=text], input[type=tel], select{
+  input[type=text], input[type=tel], input[type=email], input[type=date], select, textarea{
     width:100%;
     border:1.5px solid #DAD4C4;
     background:#FFFDF9;
@@ -153,6 +156,7 @@
     color:var(--ink);
     font-family:'Inter', sans-serif;
   }
+  textarea{ min-height:80px; resize:vertical; }
   select{
     appearance:none;
     -webkit-appearance:none;
@@ -161,7 +165,7 @@
     background-position:right 14px center;
     padding-right:34px;
   }
-  input:focus, select:focus{
+  input:focus, select:focus, textarea:focus{
     outline:none;
     border-color:var(--plum);
     box-shadow:0 0 0 3px rgba(107,78,113,0.15);
@@ -173,7 +177,7 @@
     letter-spacing:0;
   }
   .error{ color:var(--danger); font-size:12px; margin-top:5px; display:none; }
-  .field.invalid input, .field.invalid select{ border-color:var(--danger); }
+  .field.invalid input, .field.invalid select, .field.invalid textarea{ border-color:var(--danger); }
   .field.invalid .error{ display:block; }
 
   .loc-box{
@@ -256,8 +260,9 @@
 </head>
 <body>
 <div class="wrap">
+  <div class="logo-wrap" id="logoWrap"><img id="campaignLogo" src="" alt="Campaign logo"></div>
   <p class="eyebrow">Entries close soon</p>
-  <h1>Win the giveaway</h1>
+  <h1 id="mainTitle">Win the giveaway</h1>
   <p class="sub">Fill in your details below for a chance to win. Takes less than a minute — no purchase necessary.</p>
 
   <div class="ticket">
@@ -302,6 +307,9 @@
             <option value="Other pronoun">Other pronoun</option>
           </select>
         </div>
+
+        <!-- Campaign-specific fields render here, driven by FieldConfig via getPublicConfig -->
+        <div id="dynamicFields"></div>
 
         <div class="loc-box">
           <div class="loc-top">
@@ -366,6 +374,7 @@
 
   let sharedLocation = null; // { lat, lng, suburb }
   let ticketId = null;
+  let dynamicFieldDefs = []; // populated from getPublicConfig
 
   function genTicketId(){
     const time = Date.now().toString(36).toUpperCase();
@@ -385,6 +394,92 @@
   }
   firstName.addEventListener('input', updatePreview);
   lastName.addEventListener('input', updatePreview);
+
+  // --- Campaign config (theme + dynamic fields) — fetched fresh on every load ---
+  // A normal (non no-cors) fetch, same pattern proven out by redeem.html/winner.html/
+  // report.html: Apps Script's ContentService JSON response is readable cross-origin.
+  async function loadPublicConfig(){
+    if(!CONFIG.SHEET_ENDPOINT_URL || CONFIG.SHEET_ENDPOINT_URL.indexOf('PASTE_YOUR') !== -1) return;
+    try{
+      const res = await fetch(CONFIG.SHEET_ENDPOINT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify({ action: 'getPublicConfig' })
+      });
+      const data = await res.json();
+      if(data.status === 'ok'){
+        applyTheme(data.theme || {});
+        renderDynamicFields(data.fields || []);
+      }
+    }catch(e){
+      // Config fetch failing shouldn't block entries — the form still works with defaults.
+    }
+  }
+
+  function applyTheme(theme){
+    const root = document.documentElement.style;
+    if(theme.primaryColor) root.setProperty('--plum', theme.primaryColor);
+    if(theme.accentColor) root.setProperty('--gold', theme.accentColor);
+    if(theme.backgroundColor) root.setProperty('--deep', theme.backgroundColor);
+    if(theme.textColor) root.setProperty('--paper', theme.textColor);
+    if(theme.campaignTitle) document.getElementById('mainTitle').textContent = theme.campaignTitle;
+    if(theme.logoUrl){
+      document.getElementById('campaignLogo').src = theme.logoUrl;
+      document.getElementById('logoWrap').classList.add('on');
+    }
+  }
+
+  // Renders campaign-specific fields (from FieldConfig, enabled ones only) into
+  // #dynamicFields, in order. Values are collected on submit by field.key.
+  function renderDynamicFields(fields){
+    dynamicFieldDefs = fields;
+    const container = document.getElementById('dynamicFields');
+    container.innerHTML = '';
+
+    fields.forEach(f => {
+      const wrap = document.createElement('div');
+      wrap.className = 'field';
+      wrap.id = 'dynField_' + f.key;
+
+      const label = document.createElement('label');
+      label.setAttribute('for', 'dyn_' + f.key);
+      label.innerHTML = f.label + (f.required
+        ? ' <span style="color:var(--danger)">*</span>'
+        : ' <span class="optional-tag">(optional)</span>');
+      wrap.appendChild(label);
+
+      let input;
+      if(f.type === 'select'){
+        input = document.createElement('select');
+        const blank = document.createElement('option');
+        blank.value = ''; blank.textContent = 'Select…';
+        input.appendChild(blank);
+        (f.options || '').split(',').map(o => o.trim()).filter(Boolean).forEach(opt => {
+          const o = document.createElement('option');
+          o.value = opt; o.textContent = opt;
+          input.appendChild(o);
+        });
+      } else if(f.type === 'textarea'){
+        input = document.createElement('textarea');
+      } else {
+        input = document.createElement('input');
+        input.type = ['email','date','tel'].includes(f.type) ? f.type : 'text';
+      }
+      input.id = 'dyn_' + f.key;
+      wrap.appendChild(input);
+
+      const err = document.createElement('p');
+      err.className = 'error';
+      err.textContent = 'This field is required.';
+      wrap.appendChild(err);
+
+      container.appendChild(wrap);
+
+      input.addEventListener('input', () => {
+        if(wrap.classList.contains('invalid')) validate();
+      });
+    });
+  }
 
   // --- Reverse geocoding via OpenStreetMap Nominatim ---
   // Browsers block scripts from setting a custom User-Agent header on fetch(),
@@ -464,6 +559,14 @@
     const digits = mobile.value.replace(/\D/g,'');
     if(mobile.value.trim() && digits.length < 9){ setInvalid('fieldMobile', true); ok = false; } else setInvalid('fieldMobile', false);
 
+    // Dynamic fields — only "required" ones (as set in the Fields admin tab) are enforced.
+    dynamicFieldDefs.forEach(f => {
+      if(!f.required) return;
+      const el = document.getElementById('dyn_' + f.key);
+      if(!el || !el.value.trim()){ setInvalid('dynField_' + f.key, true); ok = false; }
+      else setInvalid('dynField_' + f.key, false);
+    });
+
     const rulesOk = document.getElementById('agreeRules').checked;
     const privacyOk = document.getElementById('agreePrivacy').checked;
     if(!rulesOk || !privacyOk){ setInvalid('fieldConsent', true); ok = false; } else setInvalid('fieldConsent', false);
@@ -497,6 +600,13 @@
       suburb: sharedLocation ? (sharedLocation.suburb || '') : '',
       submittedAt: new Date().toISOString()
     };
+
+    // Fold in whatever campaign-specific fields are enabled, keyed by their field.key —
+    // matches how Code.gs looks them up when writing the row.
+    dynamicFieldDefs.forEach(f => {
+      const el = document.getElementById('dyn_' + f.key);
+      payload[f.key] = el ? el.value.trim() : '';
+    });
 
     submitBtn.disabled = true;
     submitBtn.textContent = 'Sending…';
@@ -612,8 +722,10 @@
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    
+
   }
+
+  loadPublicConfig();
 </script>
 </body>
 </html>

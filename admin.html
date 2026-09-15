@@ -210,6 +210,20 @@
           <label for="logoUrl">Logo URL <span style="color:var(--text-mute)">(hosted image link — not uploaded here)</span></label>
           <input type="url" id="logoUrl" placeholder="https://...">
         </div>
+        <div class="row">
+          <div class="field-row" style="flex:2;">
+            <label for="heroMediaUrl">Hero banner URL <span style="color:var(--text-mute)">(hosted image or video link)</span></label>
+            <input type="url" id="heroMediaUrl" placeholder="https://...">
+          </div>
+          <div class="field-row">
+            <label for="heroMediaType">Hero type</label>
+            <select id="heroMediaType">
+              <option value="none">None</option>
+              <option value="image">Image</option>
+              <option value="video">Looped video</option>
+            </select>
+          </div>
+        </div>
 
         <div class="field-row">
           <label>Pick colors from an image <span style="color:var(--text-mute)">(sampled in your browser — nothing is uploaded)</span></label>
@@ -434,7 +448,7 @@
   }
 
   // ================= THEME =================
-  const themeFields = ['campaignTitle','primaryColor','accentColor','backgroundColor','textColor','logoUrl'];
+  const themeFields = ['campaignTitle','primaryColor','accentColor','backgroundColor','textColor','logoUrl','heroMediaUrl','heroMediaType'];
 
   function loadTheme(){
     postToScript({ action: 'getTheme' }).then(res => {

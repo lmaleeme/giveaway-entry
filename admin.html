@@ -231,6 +231,21 @@
             </select>
           </div>
         </div>
+        <div class="row">
+          <div class="field-row" style="flex:2;">
+            <label for="backgroundMediaUrl">Page background media URL <span style="color:var(--text-mute)">(fills the whole page, form floats on top)</span></label>
+            <input type="url" id="backgroundMediaUrl" placeholder="https://...">
+            <p style="font-size:11px; color:var(--text-mute); margin:6px 0 0;">Fills the full browser window behind everything, cropped to fit on any screen size. Separate from the hero banner above — you can use either, both, or neither.</p>
+          </div>
+          <div class="field-row">
+            <label for="backgroundMediaType">Background type</label>
+            <select id="backgroundMediaType">
+              <option value="none">None</option>
+              <option value="image">Image</option>
+              <option value="video">Looped video</option>
+            </select>
+          </div>
+        </div>
 
         <div class="field-row">
           <label>Pick colors from an image <span style="color:var(--text-mute)">(sampled in your browser — nothing is uploaded)</span></label>
@@ -455,7 +470,7 @@
   }
 
   // ================= THEME =================
-  const themeFields = ['campaignTitle','closingDate','primaryColor','accentColor','backgroundColor','textColor','logoUrl','heroMediaUrl','heroMediaType'];
+  const themeFields = ['campaignTitle','closingDate','primaryColor','accentColor','backgroundColor','textColor','logoUrl','heroMediaUrl','heroMediaType','backgroundMediaUrl','backgroundMediaType'];
 
   function loadTheme(){
     postToScript({ action: 'getTheme' }).then(res => {

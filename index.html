@@ -266,11 +266,11 @@
 <body>
 <div class="wrap">
   <div class="hero-media" id="heroMedia"></div>
-  <p class="eyebrow">Entries close soon</p>
+  <p class="eyebrow" id="eyebrowText">Entries close soon</p>
   <h1 id="mainTitle">Win the giveaway</h1>
   <p class="sub">Fill in your details below for a chance to win. Takes less than a minute — no purchase necessary.</p>
 
-  <div class="ticket">
+  <div class="ticket" id="entryTicket">
     <div class="stub">
       <div>
         <img class="stub-logo" id="campaignLogo" src="" alt="Campaign logo">
@@ -357,6 +357,13 @@
       <p>Winners will be contacted using the mobile number you provided.</p>
     </div>
   </div>
+
+  <div class="ticket" id="closedCard" style="display:none;">
+    <div class="form-side" style="grid-column:1/-1; text-align:center;">
+      <h2>Entries are closed</h2>
+      <p class="hint" id="closedText">This giveaway has closed. Thanks for your interest!</p>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -381,6 +388,43 @@
   let sharedLocation = null; // { lat, lng, suburb }
   let ticketId = null;
   let dynamicFieldDefs = []; // populated from getPublicConfig
+  let closingDateValue = ''; // 'YYYY-MM-DD' from ThemeConfig, or '' for no closing date
+
+  function updateClosingState(){
+    const eyebrow = document.getElementById('eyebrowText');
+    const entryTicket = document.getElementById('entryTicket');
+    const closedCard = document.getElementById('closedCard');
+
+    if(!closingDateValue){
+      eyebrow.textContent = 'Entries close soon';
+      entryTicket.style.display = '';
+      closedCard.style.display = 'none';
+      return;
+    }
+
+    const closing = new Date(closingDateValue + 'T23:59:59');
+    if(isNaN(closing.getTime())){
+      eyebrow.textContent = 'Entries close soon';
+      entryTicket.style.display = '';
+      closedCard.style.display = 'none';
+      return;
+    }
+
+    const formatted = closing.toLocaleDateString('en-ZA', { day: 'numeric', month: 'long', year: 'numeric' });
+
+    if(new Date() > closing){
+      entryTicket.style.display = 'none';
+      closedCard.style.display = '';
+      document.getElementById('closedText').textContent = 'This giveaway closed on ' + formatted + '. Thanks for your interest!';
+    } else {
+      eyebrow.textContent = 'Entries close ' + formatted;
+      entryTicket.style.display = '';
+      closedCard.style.display = 'none';
+    }
+  }
+
+  // Catches a tab left open across the closing moment, without needing a page reload.
+  setInterval(updateClosingState, 60000);
 
   function genTicketId(){
     const time = Date.now().toString(36).toUpperCase();
@@ -429,6 +473,9 @@
     if(theme.backgroundColor) root.setProperty('--deep', theme.backgroundColor);
     if(theme.textColor) root.setProperty('--paper', theme.textColor);
     if(theme.campaignTitle) document.getElementById('mainTitle').textContent = theme.campaignTitle;
+
+    closingDateValue = theme.closingDate || '';
+    updateClosingState();
 
     const logo = document.getElementById('campaignLogo');
     if(theme.logoUrl){

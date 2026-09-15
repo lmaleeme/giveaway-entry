@@ -22,6 +22,9 @@
   }
   *{box-sizing:border-box;}
   html,body{margin:0;padding:0;overflow-x:hidden;}
+  .page-backdrop{ position:fixed; inset:0; z-index:0; overflow:hidden; display:none; }
+  .page-backdrop.on{ display:block; }
+  .page-backdrop img, .page-backdrop video{ width:100%; height:100%; object-fit:cover; display:block; }
   body{
     background:var(--deep);
     background-image:
@@ -35,13 +38,13 @@
     justify-content:center;
     padding:40px 16px;
   }
-  .wrap{ width:100%; max-width:880px; }
+  .wrap{ width:100%; max-width:880px; position:relative; z-index:1; }
   .logo-wrap{ display:none; text-align:center; margin-bottom:18px; }
   .logo-wrap.on{ display:block; }
   .logo-wrap img{ max-height:56px; max-width:220px; }
   .hero-media{ display:none; margin-bottom:28px; border-radius:14px; overflow:hidden; box-shadow:0 20px 50px rgba(0,0,0,0.25); }
   .hero-media.on{ display:block; }
-  .hero-media img, .hero-media video{ width:100%; height:auto; max-height:420px; object-fit:cover; display:block; }
+  .hero-media img, .hero-media video{ width:100%; height:auto; display:block; }
   .stub-logo{ display:none; width:100%; height:64px; object-fit:contain; object-position:left center; margin-bottom:16px; }
   .stub-logo.on{ display:block; }
   .eyebrow{
@@ -264,6 +267,7 @@
 </style>
 </head>
 <body>
+<div class="page-backdrop" id="pageBackdrop"></div>
 <div class="wrap">
   <div class="hero-media" id="heroMedia"></div>
   <p class="eyebrow" id="eyebrowText">Entries close soon</p>
@@ -488,21 +492,34 @@
     const heroEl = document.getElementById('heroMedia');
     heroEl.innerHTML = '';
     if(theme.heroMediaUrl && theme.heroMediaType && theme.heroMediaType !== 'none'){
-      let media;
-      if(theme.heroMediaType === 'video'){
-        media = document.createElement('video');
-        media.src = theme.heroMediaUrl;
-        media.autoplay = true; media.loop = true; media.muted = true; media.playsInline = true;
-      } else {
-        media = document.createElement('img');
-        media.src = theme.heroMediaUrl;
-        media.alt = 'Campaign banner';
-      }
-      heroEl.appendChild(media);
+      heroEl.appendChild(buildMediaEl(theme.heroMediaUrl, theme.heroMediaType));
       heroEl.classList.add('on');
     } else {
       heroEl.classList.remove('on');
     }
+
+    const backdropEl = document.getElementById('pageBackdrop');
+    backdropEl.innerHTML = '';
+    if(theme.backgroundMediaUrl && theme.backgroundMediaType && theme.backgroundMediaType !== 'none'){
+      backdropEl.appendChild(buildMediaEl(theme.backgroundMediaUrl, theme.backgroundMediaType));
+      backdropEl.classList.add('on');
+    } else {
+      backdropEl.classList.remove('on');
+    }
+  }
+
+  function buildMediaEl(url, type){
+    let media;
+    if(type === 'video'){
+      media = document.createElement('video');
+      media.src = url;
+      media.autoplay = true; media.loop = true; media.muted = true; media.playsInline = true;
+    } else {
+      media = document.createElement('img');
+      media.src = url;
+      media.alt = 'Campaign banner';
+    }
+    return media;
   }
 
   // Renders campaign-specific fields (from FieldConfig, enabled ones only) into

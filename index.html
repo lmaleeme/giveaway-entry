@@ -491,9 +491,20 @@
     const res = await fetch(url, { headers: { 'Accept': 'application/json' } });
     if(!res.ok) throw new Error('Reverse geocode failed: ' + res.status);
     const data = await res.json();
-    const a = data.address || {};
-    return a.suburb || a.neighbourhood || a.quarter || a.city_district
-      || a.town || a.village || a.city || a.county || '';
+    return pickLocationName(data.address || {});
+  }
+
+  // South African OSM data often files ward numbers ("Ward 16") into the same
+  // field regular suburb names use, which makes for inconsistent, not-very-
+  // useful location labels in reports. Skip anything shaped like a ward and
+  // fall through to the next most specific field until we hit a real name.
+  function pickLocationName(a){
+    const candidates = [a.suburb, a.neighbourhood, a.quarter, a.city_district, a.town, a.village, a.city, a.county];
+    const isWardLike = (s) => /^ward\s*\d+/i.test((s || '').trim());
+    for(const c of candidates){
+      if(c && !isWardLike(c)) return c;
+    }
+    return '';
   }
 
   locBtn.addEventListener('click', () => {

@@ -500,7 +500,7 @@
   // fall through to the next most specific field until we hit a real name.
   function pickLocationName(a){
     const candidates = [a.suburb, a.neighbourhood, a.quarter, a.city_district, a.town, a.village, a.city, a.county];
-    const isWardLike = (s) => /^ward\s*\d+/i.test((s || '').trim());
+    const isWardLike = (s) => /\bward\s*\d+\b/i.test((s || '').trim());
     for(const c of candidates){
       if(c && !isWardLike(c)) return c;
     }
@@ -541,10 +541,16 @@
       (err) => {
         locBtn.disabled = false;
         locBtn.textContent = 'Share location';
-        locText.textContent = 'Location request declined or unavailable.';
+        if(err.code === err.PERMISSION_DENIED){
+          locText.textContent = 'Location permission was denied. You can allow it in your browser settings and try again.';
+        } else if(err.code === err.TIMEOUT){
+          locText.textContent = 'Location took too long to respond. Please try again.';
+        } else {
+          locText.textContent = 'Could not determine your location right now. Please try again.';
+        }
         locStatus.classList.add('on');
       },
-      { timeout: 8000 }
+      { timeout: 20000, maximumAge: 0 }
     );
   });
 

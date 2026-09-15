@@ -209,11 +209,13 @@
         <div class="field-row">
           <label for="logoUrl">Logo URL <span style="color:var(--text-mute)">(hosted image link — not uploaded here)</span></label>
           <input type="url" id="logoUrl" placeholder="https://...">
+          <p style="font-size:11px; color:var(--text-mute); margin:6px 0 0;">Renders in a fixed landscape band on the ticket stub. Best results: a transparent-background PNG, wider than tall (roughly 3:1, e.g. 300×100px) — it'll be scaled to fit without stretching, but a very tall/square logo will look small since only the width fills.</p>
         </div>
         <div class="row">
           <div class="field-row" style="flex:2;">
             <label for="heroMediaUrl">Hero banner URL <span style="color:var(--text-mute)">(hosted image or video link)</span></label>
             <input type="url" id="heroMediaUrl" placeholder="https://...">
+            <p style="font-size:11px; color:var(--text-mute); margin:6px 0 0;">Landscape orientation, roughly 16:9 (e.g. 1600×900px). Keep video files small (under ~5MB) for fast loading on mobile data.</p>
           </div>
           <div class="field-row">
             <label for="heroMediaType">Hero type</label>

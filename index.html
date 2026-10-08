@@ -479,20 +479,53 @@
   // Public branding is fetched once. Apps Script caches the assembled config.
   async function loadPublicConfig(){
     if(!CONFIG.SHEET_ENDPOINT_URL || CONFIG.SHEET_ENDPOINT_URL.indexOf('PASTE_YOUR') !== -1) return;
+
+    // Use POST first because this is the route supported by existing Apps Script
+    // deployments. Only treat a response as valid config when it actually
+    // contains a theme object. This prevents an older doGet() response such as
+    // {status:"ok", service:"giveaway"} from being mistaken for empty branding.
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000);
+
     try{
-      const res = await fetch(CONFIG.SHEET_ENDPOINT_URL + '?action=getPublicConfig', {
-        method: 'GET', cache: 'no-store', signal: controller.signal
+      const res = await fetch(CONFIG.SHEET_ENDPOINT_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify({ action: 'getPublicConfig' }),
+        signal: controller.signal
       });
       if(!res.ok) throw new Error('Config request failed: ' + res.status);
       const data = await res.json();
-      if(data.status === 'ok'){
-        applyTheme(data.theme || {});
-        renderDynamicFields(data.fields || []);
+
+      if(data.status === 'ok' && data.theme && typeof data.theme === 'object'){
+        applyTheme(data.theme);
+        renderDynamicFields(Array.isArray(data.fields) ? data.fields : []);
+        return;
       }
-    }catch(e){
-      console.warn('Campaign config unavailable; using defaults.', e);
+
+      throw new Error('Invalid public config response');
+    }catch(postError){
+      // GET is a compatibility fallback for deployments that expose doGet().
+      // It is accepted only when a real theme object is present.
+      try{
+        const fallbackController = new AbortController();
+        const fallbackTimeout = setTimeout(() => fallbackController.abort(), 5000);
+        const res = await fetch(CONFIG.SHEET_ENDPOINT_URL + '?action=getPublicConfig', {
+          method: 'GET', cache: 'no-store', signal: fallbackController.signal
+        });
+        if(!res.ok) throw new Error('GET config request failed: ' + res.status);
+        const data = await res.json();
+        if(data.status === 'ok' && data.theme && typeof data.theme === 'object'){
+          applyTheme(data.theme);
+          renderDynamicFields(Array.isArray(data.fields) ? data.fields : []);
+          clearTimeout(fallbackTimeout);
+          return;
+        }
+        clearTimeout(fallbackTimeout);
+        throw new Error('Invalid GET public config response');
+      }catch(getError){
+        console.warn('Campaign config unavailable; using defaults.', postError, getError);
+      }
     }finally{
       clearTimeout(timeout);
     }

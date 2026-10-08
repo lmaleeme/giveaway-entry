@@ -62,6 +62,15 @@
     padding:40px 16px;
   }
   .wrap{ width:100%; max-width:880px; position:relative; z-index:1; }
+  /* Never show the generic template while campaign branding is loading. */
+  body:not(.config-ready) .wrap{ visibility:hidden; }
+  #configLoader{
+    position:fixed; inset:0; z-index:1000; display:flex; align-items:center; justify-content:center;
+    background:var(--deep); color:var(--paper); font-family:'Inter',sans-serif;
+    text-align:center; padding:24px;
+  }
+  body.config-ready #configLoader{ display:none; }
+  #configLoaderText{ font-size:14px; opacity:.8; }
   .logo-wrap{ display:none; text-align:center; margin-bottom:18px; }
   .logo-wrap.on{ display:block; }
   .logo-wrap img{ max-height:56px; max-width:220px; }
@@ -291,6 +300,7 @@
 </style>
 </head>
 <body>
+<div id="configLoader" aria-live="polite"><div id="configLoaderText">Loading campaign…</div></div>
 <div class="page-backdrop" id="pageBackdrop"></div>
 <img class="floating-brand-logo" id="floatingBrandLogo" src="" alt="" aria-hidden="true">
 <div class="wrap">
@@ -478,29 +488,84 @@
   // --- Campaign config ----------------------------------------------------
   // Public branding is fetched once. Apps Script caches the assembled config.
   async function loadPublicConfig(){
-    if(!CONFIG.SHEET_ENDPOINT_URL || CONFIG.SHEET_ENDPOINT_URL.indexOf('PASTE_YOUR') !== -1) return;
-
-    // Keep the first paint independent of Apps Script. The page renders its
-    // lightweight defaults immediately, then applies the brand config when it arrives.
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 3500);
-    try{
-      const res = await fetch(CONFIG.SHEET_ENDPOINT_URL + '?action=getPublicConfig', {
-        method: 'GET',
-        cache: 'no-store',
-        signal: controller.signal
-      });
-      if(!res.ok) throw new Error('Config request failed: ' + res.status);
-      const data = await res.json();
-      if(data.status === 'ok' && data.theme && typeof data.theme === 'object'){
-        applyTheme(data.theme);
-        renderDynamicFields(Array.isArray(data.fields) ? data.fields : []);
-      }
-    }catch(err){
-      console.warn('Campaign config unavailable; using defaults.', err);
-    }finally{
-      clearTimeout(timeout);
+    if(!CONFIG.SHEET_ENDPOINT_URL || CONFIG.SHEET_ENDPOINT_URL.indexOf('PASTE_YOUR') !== -1){
+      showConfigError('Campaign configuration is not connected.');
+      return;
     }
+
+    // If this browser has already loaded this campaign, use the last known
+    // branded config immediately, then refresh it in the background.
+    try{
+      const cached = localStorage.getItem('giveawayPublicConfigV2');
+      if(cached){
+        const data = JSON.parse(cached);
+        if(data && data.theme && typeof data.theme === 'object'){
+          applyTheme(data.theme);
+          renderDynamicFields(Array.isArray(data.fields) ? data.fields : []);
+          document.body.classList.add('config-ready');
+        }
+      }
+    }catch(e){}
+
+    let data = null;
+
+    // POST is the primary path because it works with the existing Apps Script
+    // deployment even when its doGet() is an older version.
+    try{
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5000);
+      try{
+        const res = await fetch(CONFIG.SHEET_ENDPOINT_URL, {
+          method:'POST',
+          headers:{'Content-Type':'text/plain'},
+          body:JSON.stringify({action:'getPublicConfig'}),
+          signal:controller.signal,
+          cache:'no-store'
+        });
+        if(!res.ok) throw new Error('Config request failed: ' + res.status);
+        const candidate = await res.json();
+        if(candidate.status === 'ok' && candidate.theme && typeof candidate.theme === 'object') data = candidate;
+      } finally { clearTimeout(timeout); }
+    }catch(e){
+      console.warn('POST public config failed:', e);
+    }
+
+    // GET compatibility fallback.
+    if(!data){
+      try{
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 5000);
+        try{
+          const res = await fetch(CONFIG.SHEET_ENDPOINT_URL + '?action=getPublicConfig', {
+            method:'GET', cache:'no-store', signal:controller.signal
+          });
+          if(!res.ok) throw new Error('GET config request failed: ' + res.status);
+          const candidate = await res.json();
+          if(candidate.status === 'ok' && candidate.theme && typeof candidate.theme === 'object') data = candidate;
+        } finally { clearTimeout(timeout); }
+      }catch(e){
+        console.warn('GET public config failed:', e);
+      }
+    }
+
+    if(data){
+      applyTheme(data.theme);
+      renderDynamicFields(Array.isArray(data.fields) ? data.fields : []);
+      try{ localStorage.setItem('giveawayPublicConfigV2', JSON.stringify(data)); }catch(e){}
+      document.body.classList.add('config-ready');
+      return;
+    }
+
+    // Do not fall back to the generic campaign. Keep the page blocked rather
+    // than showing the wrong brand, title, colours or fields.
+    if(!document.body.classList.contains('config-ready')){
+      showConfigError('We could not load this giveaway. Please refresh the page.');
+    }
+  }
+
+  function showConfigError(message){
+    const el = document.getElementById('configLoaderText');
+    if(el) el.textContent = message;
   }
 
   function applyTheme(theme){

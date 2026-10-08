@@ -59,9 +59,9 @@
     display:flex;
     align-items:center;
     justify-content:center;
-    padding:40px 16px;
+    padding:40px 28px;
   }
-  .wrap{ width:100%; max-width:880px; position:relative; z-index:1; }
+  .wrap{ width:min(100%, 760px); max-width:760px; position:relative; z-index:1; }
   /* Never show the generic template while campaign branding is loading. */
   body:not(.config-ready) .wrap{ visibility:hidden; }
   #configLoader{
@@ -73,7 +73,7 @@
   #configLoaderText{ font-size:14px; opacity:.8; }
   .logo-wrap{ display:none; text-align:center; margin-bottom:18px; }
   .logo-wrap.on{ display:block; }
-  .logo-wrap img{ max-height:56px; max-width:220px; }
+  .logo-wrap img{ max-height:56px; max-width:190px; }
   .hero-media{ display:none; margin-bottom:28px; border-radius:14px; overflow:hidden; box-shadow:0 20px 50px rgba(0,0,0,0.25); }
   .hero-media.on{ display:block; }
   .hero-media img, .hero-media video{ width:100%; height:auto; display:block; }
@@ -82,7 +82,7 @@
   .stub-logo.on{ display:block; }
   /* Readability panel keeps campaign text legible over any photo or video. */
   .campaign-intro{
-    width:min(720px,100%);
+    width:min(640px,100%);
     margin:0 auto 28px;
     padding:18px 24px 20px;
     border-radius:20px;
@@ -123,6 +123,7 @@
     .campaign-intro{ padding:16px 16px 18px; border-radius:16px; }
   }
   .ticket{
+    width:100%;
     display:grid;
     grid-template-columns:1fr 2.4fr;
     background:var(--paper);
@@ -131,6 +132,9 @@
     box-shadow:0 24px 60px rgba(0,0,0,0.35);
   }
   @media (max-width:620px){
+    body{padding:24px 14px;}
+    .wrap{width:100%; max-width:none;}
+    .campaign-intro{width:100%;}
     .ticket{grid-template-columns:1fr;}
     .stub{order:2;}
   }
@@ -512,18 +516,32 @@
       return;
     }
 
+    // Paint the last known BRAND immediately. This removes the per-load pause
+    // without ever falling back to the generic template. A fresh config is
+    // then fetched in the background and replaces it when available.
+    let hadCachedBrand = false;
+    try{
+      const cached = localStorage.getItem('giveawayPublicConfigV3');
+      if(cached){
+        const cachedData = JSON.parse(cached);
+        if(cachedData && cachedData.theme && typeof cachedData.theme === 'object'){
+          campaignConfigVersion = cachedData.publishedAt || '';
+          applyTheme(cachedData.theme);
+          renderDynamicFields(Array.isArray(cachedData.fields) ? cachedData.fields : []);
+          document.body.classList.add('config-ready');
+          hadCachedBrand = true;
+        }
+      }
+    }catch(e){}
+
+    // Fetch the current published campaign in the background. The endpoint
+    // itself is cached server-side and invalidated whenever Admin saves.
     let data = null;
-
-    // Always ask Apps Script for the current published campaign first.
-    // Do not paint stale localStorage branding before this request completes:
-    // that made admin changes appear to take minutes to verify.
-    const freshUrl = CONFIG.SHEET_ENDPOINT_URL + (CONFIG.SHEET_ENDPOINT_URL.indexOf('?') === -1 ? '?' : '&') + 'v=' + Date.now();
-
     try{
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 6000);
+      const timeout = setTimeout(() => controller.abort(), 5000);
       try{
-        const res = await fetch(freshUrl, {
+        const res = await fetch(CONFIG.SHEET_ENDPOINT_URL, {
           method:'POST',
           headers:{'Content-Type':'text/plain'},
           body:JSON.stringify({action:'getPublicConfig'}),
@@ -532,30 +550,24 @@
         });
         if(!res.ok) throw new Error('Config request failed: ' + res.status);
         const candidate = await res.json();
-        if(candidate.status === 'ok' && candidate.theme && typeof candidate.theme === 'object'){
-          data = candidate;
-        }
+        if(candidate.status === 'ok' && candidate.theme && typeof candidate.theme === 'object') data = candidate;
       } finally { clearTimeout(timeout); }
     }catch(e){
       console.warn('POST public config failed:', e);
     }
 
-    // GET compatibility fallback for older deployments.
     if(!data){
       try{
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 6000);
+        const timeout = setTimeout(() => controller.abort(), 5000);
         try{
-          const res = await fetch(freshUrl + '&action=getPublicConfig', {
-            method:'GET',
-            cache:'no-store',
-            signal:controller.signal
+          const sep = CONFIG.SHEET_ENDPOINT_URL.indexOf('?') === -1 ? '?' : '&';
+          const res = await fetch(CONFIG.SHEET_ENDPOINT_URL + sep + 'action=getPublicConfig', {
+            method:'GET', cache:'no-store', signal:controller.signal
           });
           if(!res.ok) throw new Error('GET config request failed: ' + res.status);
           const candidate = await res.json();
-          if(candidate.status === 'ok' && candidate.theme && typeof candidate.theme === 'object'){
-            data = candidate;
-          }
+          if(candidate.status === 'ok' && candidate.theme && typeof candidate.theme === 'object') data = candidate;
         } finally { clearTimeout(timeout); }
       }catch(e){
         console.warn('GET public config failed:', e);
@@ -571,23 +583,7 @@
       return;
     }
 
-    // If the network is unavailable, use the last known branded campaign only
-    // as an offline fallback. Never use the generic template as a fallback.
-    try{
-      const cached = localStorage.getItem('giveawayPublicConfigV3');
-      if(cached){
-        const cachedData = JSON.parse(cached);
-        if(cachedData && cachedData.theme && typeof cachedData.theme === 'object'){
-          campaignConfigVersion = cachedData.publishedAt || '';
-          applyTheme(cachedData.theme);
-          renderDynamicFields(Array.isArray(cachedData.fields) ? cachedData.fields : []);
-          document.body.classList.add('config-ready');
-          return;
-        }
-      }
-    }catch(e){}
-
-    showConfigError('We could not load this giveaway. Please refresh the page.');
+    if(!hadCachedBrand) showConfigError('We could not load this giveaway. Please refresh the page.');
   }
 
   function showConfigError(message){

@@ -480,52 +480,24 @@
   async function loadPublicConfig(){
     if(!CONFIG.SHEET_ENDPOINT_URL || CONFIG.SHEET_ENDPOINT_URL.indexOf('PASTE_YOUR') !== -1) return;
 
-    // Use POST first because this is the route supported by existing Apps Script
-    // deployments. Only treat a response as valid config when it actually
-    // contains a theme object. This prevents an older doGet() response such as
-    // {status:"ok", service:"giveaway"} from being mistaken for empty branding.
+    // Keep the first paint independent of Apps Script. The page renders its
+    // lightweight defaults immediately, then applies the brand config when it arrives.
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 5000);
-
+    const timeout = setTimeout(() => controller.abort(), 3500);
     try{
-      const res = await fetch(CONFIG.SHEET_ENDPOINT_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify({ action: 'getPublicConfig' }),
+      const res = await fetch(CONFIG.SHEET_ENDPOINT_URL + '?action=getPublicConfig', {
+        method: 'GET',
+        cache: 'no-store',
         signal: controller.signal
       });
       if(!res.ok) throw new Error('Config request failed: ' + res.status);
       const data = await res.json();
-
       if(data.status === 'ok' && data.theme && typeof data.theme === 'object'){
         applyTheme(data.theme);
         renderDynamicFields(Array.isArray(data.fields) ? data.fields : []);
-        return;
       }
-
-      throw new Error('Invalid public config response');
-    }catch(postError){
-      // GET is a compatibility fallback for deployments that expose doGet().
-      // It is accepted only when a real theme object is present.
-      try{
-        const fallbackController = new AbortController();
-        const fallbackTimeout = setTimeout(() => fallbackController.abort(), 5000);
-        const res = await fetch(CONFIG.SHEET_ENDPOINT_URL + '?action=getPublicConfig', {
-          method: 'GET', cache: 'no-store', signal: fallbackController.signal
-        });
-        if(!res.ok) throw new Error('GET config request failed: ' + res.status);
-        const data = await res.json();
-        if(data.status === 'ok' && data.theme && typeof data.theme === 'object'){
-          applyTheme(data.theme);
-          renderDynamicFields(Array.isArray(data.fields) ? data.fields : []);
-          clearTimeout(fallbackTimeout);
-          return;
-        }
-        clearTimeout(fallbackTimeout);
-        throw new Error('Invalid GET public config response');
-      }catch(getError){
-        console.warn('Campaign config unavailable; using defaults.', postError, getError);
-      }
+    }catch(err){
+      console.warn('Campaign config unavailable; using defaults.', err);
     }finally{
       clearTimeout(timeout);
     }
@@ -565,7 +537,7 @@
     const heroEl = document.getElementById('heroMedia');
     heroEl.innerHTML = '';
     if(theme.heroMediaUrl && theme.heroMediaType && theme.heroMediaType !== 'none'){
-      heroEl.appendChild(buildMediaEl(theme.heroMediaUrl, theme.heroMediaType));
+      heroEl.appendChild(buildMediaEl(theme.heroMediaUrl, theme.heroMediaType, false));
       heroEl.classList.add('on');
     } else {
       heroEl.classList.remove('on');
@@ -574,27 +546,34 @@
     const backdropEl = document.getElementById('pageBackdrop');
     backdropEl.innerHTML = '';
     if(theme.backgroundMediaUrl && theme.backgroundMediaType && theme.backgroundMediaType !== 'none'){
-      backdropEl.appendChild(buildMediaEl(theme.backgroundMediaUrl, theme.backgroundMediaType));
+      backdropEl.appendChild(buildMediaEl(theme.backgroundMediaUrl, theme.backgroundMediaType, true));
       backdropEl.classList.add('on');
     } else {
       backdropEl.classList.remove('on');
     }
   }
 
-  function buildMediaEl(url, type){
+  function buildMediaEl(url, type, isBackground){
     let media;
     if(type === 'video'){
       media = document.createElement('video');
       media.src = url;
       media.autoplay = true; media.loop = true; media.muted = true; media.playsInline = true;
-      media.preload = 'metadata';
+      media.preload = isBackground ? 'none' : 'metadata';
+      media.setAttribute('playsinline','');
+      if(isBackground){
+        media.style.visibility = 'hidden';
+        const reveal = () => { media.style.visibility = 'visible'; };
+        media.addEventListener('loadeddata', reveal, {once:true});
+        setTimeout(() => { try { media.load(); media.play().catch(()=>{}); } catch(e){} }, 900);
+      }
     } else {
       media = document.createElement('img');
       media.src = url;
       media.alt = 'Campaign banner';
-      media.loading = 'lazy';
+      media.loading = isBackground ? 'lazy' : 'eager';
       media.decoding = 'async';
-      media.fetchPriority = 'low';
+      media.fetchPriority = isBackground ? 'low' : 'high';
     }
     return media;
   }
@@ -799,26 +778,31 @@
     submitBtn.textContent = 'Sending…';
 
     try{
+      // Do not make the customer wait for Google Apps Script / Sheets.
+      // The request is intentionally fire-and-forget; the ticket UI can render immediately.
       if(CONFIG.SHEET_ENDPOINT_URL && CONFIG.SHEET_ENDPOINT_URL.indexOf('PASTE_YOUR') === -1){
-        await fetch(CONFIG.SHEET_ENDPOINT_URL, {
+        fetch(CONFIG.SHEET_ENDPOINT_URL, {
           method: 'POST',
           mode: 'no-cors',
           headers: { 'Content-Type': 'text/plain' },
-          body: JSON.stringify(payload)
-        });
+          body: JSON.stringify(payload),
+          keepalive: true
+        }).catch(err => console.warn('Entry save request failed:', err));
       }
       document.getElementById('finalTicket').textContent = ticketId;
       document.getElementById('formSide').classList.add('hidden');
       document.getElementById('successPanel').classList.add('on');
 
-      JsBarcode('#ticketBarcode', ticketId, {
-        format: 'CODE128',
-        width: 2,
-        height: 50,
-        displayValue: false,
-        background: 'transparent',
-        lineColor: '#232136'
-      });
+      if(window.JsBarcode){
+        JsBarcode('#ticketBarcode', ticketId, {
+          format: 'CODE128',
+          width: 2,
+          height: 50,
+          displayValue: false,
+          background: 'transparent',
+          lineColor: '#232136'
+        });
+      }
     }catch(err){
       submitErr.style.display = 'block';
       submitBtn.disabled = false;

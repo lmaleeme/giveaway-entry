@@ -80,6 +80,19 @@
   /* 30% smaller than the original 64px treatment. */
   .stub-logo{ display:none; width:100%; height:45px; object-fit:contain; object-position:left center; margin-bottom:16px; }
   .stub-logo.on{ display:block; }
+  /* Readability panel keeps campaign text legible over any photo or video. */
+  .campaign-intro{
+    width:min(720px,100%);
+    margin:0 auto 28px;
+    padding:18px 24px 20px;
+    border-radius:20px;
+    background:rgba(12,15,32,.58);
+    border:1px solid rgba(255,255,255,.14);
+    box-shadow:0 18px 50px rgba(0,0,0,.20);
+    backdrop-filter:blur(10px);
+    -webkit-backdrop-filter:blur(10px);
+    text-shadow:0 2px 12px rgba(0,0,0,.25);
+  }
   .eyebrow{
     font-family:'IBM Plex Mono', monospace;
     font-size:12px;
@@ -100,11 +113,14 @@
   }
   .sub{
     text-align:center;
-    color:#C9C6DC;
+    color:#F1EFF7;
     font-size:15px;
-    max-width:460px;
-    margin:0 auto 40px;
+    max-width:560px;
+    margin:0 auto;
     line-height:1.6;
+  }
+  @media (max-width:620px){
+    .campaign-intro{ padding:16px 16px 18px; border-radius:16px; }
   }
   .ticket{
     display:grid;
@@ -305,9 +321,11 @@
 <img class="floating-brand-logo" id="floatingBrandLogo" src="" alt="" aria-hidden="true">
 <div class="wrap">
   <div class="hero-media" id="heroMedia"></div>
-  <p class="eyebrow" id="eyebrowText">Entries close soon</p>
-  <h1 id="mainTitle">Win the giveaway</h1>
-  <p class="sub">Fill in your details below for a chance to win. Takes less than a minute — no purchase necessary.</p>
+  <section class="campaign-intro" aria-label="Campaign introduction">
+    <p class="eyebrow" id="eyebrowText">Entries close soon</p>
+    <h1 id="mainTitle">Win the giveaway</h1>
+    <p class="sub">Fill in your details below for a chance to win. Takes less than a minute — no purchase necessary.</p>
+  </section>
 
   <div class="ticket" id="entryTicket">
     <div class="stub">
@@ -429,6 +447,7 @@
   let dynamicFieldDefs = []; // populated from getPublicConfig
   let closingDateValue = ''; // 'YYYY-MM-DD' from ThemeConfig, or '' for no closing date
   let campaignTitle = 'Win the giveaway';
+  let campaignConfigVersion = '';
 
   function updateClosingState(){
     const eyebrow = document.getElementById('eyebrowText');
@@ -493,29 +512,18 @@
       return;
     }
 
-    // If this browser has already loaded this campaign, use the last known
-    // branded config immediately, then refresh it in the background.
-    try{
-      const cached = localStorage.getItem('giveawayPublicConfigV2');
-      if(cached){
-        const data = JSON.parse(cached);
-        if(data && data.theme && typeof data.theme === 'object'){
-          applyTheme(data.theme);
-          renderDynamicFields(Array.isArray(data.fields) ? data.fields : []);
-          document.body.classList.add('config-ready');
-        }
-      }
-    }catch(e){}
-
     let data = null;
 
-    // POST is the primary path because it works with the existing Apps Script
-    // deployment even when its doGet() is an older version.
+    // Always ask Apps Script for the current published campaign first.
+    // Do not paint stale localStorage branding before this request completes:
+    // that made admin changes appear to take minutes to verify.
+    const freshUrl = CONFIG.SHEET_ENDPOINT_URL + (CONFIG.SHEET_ENDPOINT_URL.indexOf('?') === -1 ? '?' : '&') + 'v=' + Date.now();
+
     try{
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 5000);
+      const timeout = setTimeout(() => controller.abort(), 6000);
       try{
-        const res = await fetch(CONFIG.SHEET_ENDPOINT_URL, {
+        const res = await fetch(freshUrl, {
           method:'POST',
           headers:{'Content-Type':'text/plain'},
           body:JSON.stringify({action:'getPublicConfig'}),
@@ -524,24 +532,30 @@
         });
         if(!res.ok) throw new Error('Config request failed: ' + res.status);
         const candidate = await res.json();
-        if(candidate.status === 'ok' && candidate.theme && typeof candidate.theme === 'object') data = candidate;
+        if(candidate.status === 'ok' && candidate.theme && typeof candidate.theme === 'object'){
+          data = candidate;
+        }
       } finally { clearTimeout(timeout); }
     }catch(e){
       console.warn('POST public config failed:', e);
     }
 
-    // GET compatibility fallback.
+    // GET compatibility fallback for older deployments.
     if(!data){
       try{
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 5000);
+        const timeout = setTimeout(() => controller.abort(), 6000);
         try{
-          const res = await fetch(CONFIG.SHEET_ENDPOINT_URL + '?action=getPublicConfig', {
-            method:'GET', cache:'no-store', signal:controller.signal
+          const res = await fetch(freshUrl + '&action=getPublicConfig', {
+            method:'GET',
+            cache:'no-store',
+            signal:controller.signal
           });
           if(!res.ok) throw new Error('GET config request failed: ' + res.status);
           const candidate = await res.json();
-          if(candidate.status === 'ok' && candidate.theme && typeof candidate.theme === 'object') data = candidate;
+          if(candidate.status === 'ok' && candidate.theme && typeof candidate.theme === 'object'){
+            data = candidate;
+          }
         } finally { clearTimeout(timeout); }
       }catch(e){
         console.warn('GET public config failed:', e);
@@ -549,18 +563,31 @@
     }
 
     if(data){
+      campaignConfigVersion = data.publishedAt || String(Date.now());
       applyTheme(data.theme);
       renderDynamicFields(Array.isArray(data.fields) ? data.fields : []);
-      try{ localStorage.setItem('giveawayPublicConfigV2', JSON.stringify(data)); }catch(e){}
+      try{ localStorage.setItem('giveawayPublicConfigV3', JSON.stringify(data)); }catch(e){}
       document.body.classList.add('config-ready');
       return;
     }
 
-    // Do not fall back to the generic campaign. Keep the page blocked rather
-    // than showing the wrong brand, title, colours or fields.
-    if(!document.body.classList.contains('config-ready')){
-      showConfigError('We could not load this giveaway. Please refresh the page.');
-    }
+    // If the network is unavailable, use the last known branded campaign only
+    // as an offline fallback. Never use the generic template as a fallback.
+    try{
+      const cached = localStorage.getItem('giveawayPublicConfigV3');
+      if(cached){
+        const cachedData = JSON.parse(cached);
+        if(cachedData && cachedData.theme && typeof cachedData.theme === 'object'){
+          campaignConfigVersion = cachedData.publishedAt || '';
+          applyTheme(cachedData.theme);
+          renderDynamicFields(Array.isArray(cachedData.fields) ? cachedData.fields : []);
+          document.body.classList.add('config-ready');
+          return;
+        }
+      }
+    }catch(e){}
+
+    showConfigError('We could not load this giveaway. Please refresh the page.');
   }
 
   function showConfigError(message){
@@ -588,9 +615,9 @@
     const logo = document.getElementById('campaignLogo');
     const floatingLogo = document.getElementById('floatingBrandLogo');
     if(theme.logoUrl){
-      logo.src = theme.logoUrl;
+      logo.src = addAssetVersion(theme.logoUrl);
       logo.classList.add('on');
-      floatingLogo.src = theme.logoUrl;
+      floatingLogo.src = addAssetVersion(theme.logoUrl);
       floatingLogo.alt = campaignTitle + ' logo';
       floatingLogo.classList.add('on');
     } else {
@@ -602,7 +629,7 @@
     const heroEl = document.getElementById('heroMedia');
     heroEl.innerHTML = '';
     if(theme.heroMediaUrl && theme.heroMediaType && theme.heroMediaType !== 'none'){
-      heroEl.appendChild(buildMediaEl(theme.heroMediaUrl, theme.heroMediaType, false));
+      heroEl.appendChild(buildMediaEl(addAssetVersion(theme.heroMediaUrl), theme.heroMediaType, false));
       heroEl.classList.add('on');
     } else {
       heroEl.classList.remove('on');
@@ -611,11 +638,17 @@
     const backdropEl = document.getElementById('pageBackdrop');
     backdropEl.innerHTML = '';
     if(theme.backgroundMediaUrl && theme.backgroundMediaType && theme.backgroundMediaType !== 'none'){
-      backdropEl.appendChild(buildMediaEl(theme.backgroundMediaUrl, theme.backgroundMediaType, true));
+      backdropEl.appendChild(buildMediaEl(addAssetVersion(theme.backgroundMediaUrl), theme.backgroundMediaType, true));
       backdropEl.classList.add('on');
     } else {
       backdropEl.classList.remove('on');
     }
+  }
+
+  function addAssetVersion(url){
+    if(!url || !campaignConfigVersion) return url;
+    const separator = url.indexOf('?') === -1 ? '?' : '&';
+    return url + separator + 'campaign_v=' + encodeURIComponent(campaignConfigVersion);
   }
 
   function buildMediaEl(url, type, isBackground){

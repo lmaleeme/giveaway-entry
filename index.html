@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=IBM+Plex+Mono:wght@400;500&family=Inter:wght@400;500&display=swap" rel="stylesheet">
- <script src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.12.3/JsBarcode.all.min.js"></script>
+ <script defer src="https://cdnjs.cloudflare.com/ajax/libs/jsbarcode/3.12.3/JsBarcode.all.min.js"></script>
 <style>
   :root{
     --deep:#1B1B3A;
@@ -25,6 +25,29 @@
   .page-backdrop{ position:fixed; inset:0; z-index:0; overflow:hidden; display:none; }
   .page-backdrop.on{ display:block; }
   .page-backdrop img, .page-backdrop video{ width:100%; height:100%; object-fit:cover; display:block; }
+  .floating-brand-logo{
+    position:fixed;
+    top:clamp(18px, 8vh, 72px);
+    left:50%;
+    width:min(154px, 18vw);
+    max-height:84px;
+    object-fit:contain;
+    object-position:center;
+    transform:translate(-50%, -16px) scale(.94);
+    opacity:0;
+    z-index:0;
+    pointer-events:none;
+    transition:transform .35s ease, opacity .35s ease;
+    filter:drop-shadow(0 10px 24px rgba(0,0,0,.18));
+  }
+  .floating-brand-logo.on{ opacity:.04; }
+  .floating-brand-logo.scrolling-up{
+    transform:translate(-50%, 4px) scale(1);
+    opacity:.13;
+  }
+  @media (max-width:620px){
+    .floating-brand-logo{ width:34vw; max-height:64px; }
+  }
   body{
     background:var(--deep);
     background-image:
@@ -45,7 +68,8 @@
   .hero-media{ display:none; margin-bottom:28px; border-radius:14px; overflow:hidden; box-shadow:0 20px 50px rgba(0,0,0,0.25); }
   .hero-media.on{ display:block; }
   .hero-media img, .hero-media video{ width:100%; height:auto; display:block; }
-  .stub-logo{ display:none; width:100%; height:64px; object-fit:contain; object-position:left center; margin-bottom:16px; }
+  /* 30% smaller than the original 64px treatment. */
+  .stub-logo{ display:none; width:100%; height:45px; object-fit:contain; object-position:left center; margin-bottom:16px; }
   .stub-logo.on{ display:block; }
   .eyebrow{
     font-family:'IBM Plex Mono', monospace;
@@ -268,6 +292,7 @@
 </head>
 <body>
 <div class="page-backdrop" id="pageBackdrop"></div>
+<img class="floating-brand-logo" id="floatingBrandLogo" src="" alt="" aria-hidden="true">
 <div class="wrap">
   <div class="hero-media" id="heroMedia"></div>
   <p class="eyebrow" id="eyebrowText">Entries close soon</p>
@@ -285,7 +310,7 @@
     </div>
 
     <div class="form-side" id="formSide">
-      <h2>Your details</h2>
+      <h2 id="formTitle">Your details</h2>
       <p class="hint">Name and surname are required. Everything else is optional.</p>
 
       <form id="entryForm" novalidate>
@@ -353,7 +378,7 @@
     </div>
 
     <div class="success" id="successPanel">
-      <h2>You're entered</h2>
+      <h2 id="successTitle">You're entered</h2>
       <p>Thanks — your entry has been received.</p>
       <p class="num" id="finalTicket"></p>
       <svg id="ticketBarcode" style="margin: 4px auto 16px; display:block;"></svg>
@@ -393,6 +418,7 @@
   let ticketId = null;
   let dynamicFieldDefs = []; // populated from getPublicConfig
   let closingDateValue = ''; // 'YYYY-MM-DD' from ThemeConfig, or '' for no closing date
+  let campaignTitle = 'Win the giveaway';
 
   function updateClosingState(){
     const eyebrow = document.getElementById('eyebrowText');
@@ -449,24 +475,26 @@
   firstName.addEventListener('input', updatePreview);
   lastName.addEventListener('input', updatePreview);
 
-  // --- Campaign config (theme + dynamic fields) — fetched fresh on every load ---
-  // A normal (non no-cors) fetch, same pattern proven out by redeem.html/winner.html/
-  // report.html: Apps Script's ContentService JSON response is readable cross-origin.
+  // --- Campaign config ----------------------------------------------------
+  // Public branding is fetched once. Apps Script caches the assembled config.
   async function loadPublicConfig(){
     if(!CONFIG.SHEET_ENDPOINT_URL || CONFIG.SHEET_ENDPOINT_URL.indexOf('PASTE_YOUR') !== -1) return;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 5000);
     try{
-      const res = await fetch(CONFIG.SHEET_ENDPOINT_URL, {
-        method: 'POST',
-        headers: { 'Content-Type': 'text/plain' },
-        body: JSON.stringify({ action: 'getPublicConfig' })
+      const res = await fetch(CONFIG.SHEET_ENDPOINT_URL + '?action=getPublicConfig', {
+        method: 'GET', cache: 'no-store', signal: controller.signal
       });
+      if(!res.ok) throw new Error('Config request failed: ' + res.status);
       const data = await res.json();
       if(data.status === 'ok'){
         applyTheme(data.theme || {});
         renderDynamicFields(data.fields || []);
       }
     }catch(e){
-      // Config fetch failing shouldn't block entries — the form still works with defaults.
+      console.warn('Campaign config unavailable; using defaults.', e);
+    }finally{
+      clearTimeout(timeout);
     }
   }
 
@@ -476,17 +504,29 @@
     if(theme.accentColor) root.setProperty('--gold', theme.accentColor);
     if(theme.backgroundColor) root.setProperty('--deep', theme.backgroundColor);
     if(theme.textColor) root.setProperty('--paper', theme.textColor);
-    if(theme.campaignTitle) document.getElementById('mainTitle').textContent = theme.campaignTitle;
+
+    if(theme.campaignTitle){
+      campaignTitle = String(theme.campaignTitle).trim() || 'Win the giveaway';
+      document.getElementById('mainTitle').textContent = campaignTitle;
+      document.getElementById('successTitle').textContent = campaignTitle;
+      document.title = campaignTitle;
+    }
 
     closingDateValue = theme.closingDate || '';
     updateClosingState();
 
     const logo = document.getElementById('campaignLogo');
+    const floatingLogo = document.getElementById('floatingBrandLogo');
     if(theme.logoUrl){
       logo.src = theme.logoUrl;
       logo.classList.add('on');
+      floatingLogo.src = theme.logoUrl;
+      floatingLogo.alt = campaignTitle + ' logo';
+      floatingLogo.classList.add('on');
     } else {
       logo.classList.remove('on');
+      floatingLogo.removeAttribute('src');
+      floatingLogo.classList.remove('on');
     }
 
     const heroEl = document.getElementById('heroMedia');
@@ -514,10 +554,14 @@
       media = document.createElement('video');
       media.src = url;
       media.autoplay = true; media.loop = true; media.muted = true; media.playsInline = true;
+      media.preload = 'metadata';
     } else {
       media = document.createElement('img');
       media.src = url;
       media.alt = 'Campaign banner';
+      media.loading = 'lazy';
+      media.decoding = 'async';
+      media.fetchPriority = 'low';
     }
     return media;
   }
@@ -801,19 +845,19 @@
 
     ctx.fillStyle = '#232136';
     ctx.font = '600 30px Georgia, serif';
-    ctx.fillText("You're entered", stubWidth + 40, 90);
+    wrapText(ctx, campaignTitle, stubWidth + 40, 90, 900 - stubWidth - 80, 30);
 
     ctx.fillStyle = '#5A5570';
     ctx.font = '16px sans-serif';
-    ctx.fillText((first + ' ' + last).trim() || 'Giveaway entrant', stubWidth + 40, 130);
+    ctx.fillText((first + ' ' + last).trim() || 'Giveaway entrant', stubWidth + 40, 150);
 
     ctx.fillStyle = '#6B4E71';
     ctx.font = '500 14px monospace';
-    ctx.fillText(id, stubWidth + 40, 165);
+    ctx.fillText(id, stubWidth + 40, 185);
 
     ctx.fillStyle = '#5A5570';
     ctx.font = '13px sans-serif';
-    wrapText(ctx, 'Keep this ticket as proof of entry. Winners are contacted on the mobile number provided.', stubWidth + 40, 210, 900 - stubWidth - 80, 20);
+    wrapText(ctx, 'Keep this ticket as proof of entry. Winners are contacted on the mobile number provided.', stubWidth + 40, 220, 900 - stubWidth - 80, 20);
 
     const barcodeCanvas = document.createElement('canvas');
     JsBarcode(barcodeCanvas, id, {
@@ -824,7 +868,7 @@
       background: '#F5F1E8',
       lineColor: '#232136'
     });
-    ctx.drawImage(barcodeCanvas, stubWidth + 40, 250, 320, 70);
+    ctx.drawImage(barcodeCanvas, stubWidth + 40, 275, 320, 70);
 
     const link = document.createElement('a');
     link.download = 'giveaway-ticket-' + id + '.png';
@@ -834,6 +878,24 @@
     document.body.removeChild(link);
 
   }
+
+  // Reveal the brand mark subtly behind the form while the visitor scrolls up.
+  let lastScrollY = window.scrollY;
+  let scrollTicking = false;
+  function updateScrollBrand(){
+    const y = window.scrollY;
+    const logo = document.getElementById('floatingBrandLogo');
+    if(y < lastScrollY - 2) logo.classList.add('scrolling-up');
+    else if(y > lastScrollY + 2) logo.classList.remove('scrolling-up');
+    lastScrollY = y;
+    scrollTicking = false;
+  }
+  window.addEventListener('scroll', () => {
+    if(!scrollTicking){
+      window.requestAnimationFrame(updateScrollBrand);
+      scrollTicking = true;
+    }
+  }, {passive:true});
 
   loadPublicConfig();
 </script>
